@@ -1,0 +1,16 @@
+# Faqat lokal ishlab chiqish uchun Postgres (productionda Neon ishlatiladi).
+# Ishga tushirish: docker compose up -d
+# Keyin apps/api/.env: DATABASE_URL=DIRECT_URL=postgresql://postgres:postgres@localhost:5432/sat
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sat
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

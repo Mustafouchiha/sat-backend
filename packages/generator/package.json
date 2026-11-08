@@ -1,0 +1,17 @@
+{
+  "name": "@sat/generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SAT savol shablonlaridan seed asosida cheksiz variant yasovchi generator",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../.. packages/generator",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "mathjs": "^14.0.1",
+    "zod": "^3.24.1"
+  }
+}

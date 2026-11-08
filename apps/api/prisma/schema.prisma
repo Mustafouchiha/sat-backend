@@ -1,0 +1,650 @@
+// SAT Mini App — PostgreSQL (Neon) sxemasi
+// DATABASE_URL — Neon pooled ulanish (runtime), DIRECT_URL — Neon direct ulanish (migratsiyalar)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  OPERATOR
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+}
+
+enum GroupRole {
+  STUDENT
+  TEACHER
+}
+
+enum Section {
+  RW
+  MATH
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum TemplateStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum TestType {
+  MOCK
+  SECTION
+  MODULE
+  TOPIC
+  HOMEWORK
+  QUICK
+}
+
+enum ModuleVariant {
+  STANDARD
+  EASY
+  HARD
+}
+
+enum AttemptMode {
+  TEST
+  PRACTICE
+  REVIEW
+  DAILY
+  RUSH
+  DUEL
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  BREAK
+  FINISHED
+  ABANDONED
+}
+
+enum RatingType {
+  OVERALL
+  MATH
+  RW
+}
+
+enum ResultVisibility {
+  IMMEDIATE
+  AFTER_DUE
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+enum DuelStatus {
+  WAITING
+  ACTIVE
+  FINISHED
+  CANCELLED
+}
+
+// ───────────────────────── Foydalanuvchilar va guruhlar ─────────────────────────
+
+model User {
+  id            String     @id @default(cuid())
+  tgId          BigInt     @unique
+  firstName     String     @default("")
+  lastName      String?
+  username      String?
+  photoUrl      String?
+  lang          String     @default("uz")
+  roles         Role[]     @default([STUDENT])
+  status        UserStatus @default(PENDING)
+  targetScore   Int?
+  examDate      DateTime?
+  xp            Int        @default(0)
+  answeredTotal Int        @default(0)
+  correctTotal  Int        @default(0)
+  notifyDaily   Boolean    @default(true)
+  botBlocked    Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  lastSeenAt    DateTime?
+
+  memberships   GroupMember[]
+  attempts      Attempt[]
+  ratings       Rating[]
+  ratingHistory RatingHistory[]
+  masteries     SkillMastery[]
+  reviewItems   ReviewItem[]
+  streak        Streak?
+  achievements  UserAchievement[]
+  reports       Report[]
+  commentsGiven TeacherComment[]  @relation("CommentTeacher")
+  commentsGot   TeacherComment[]  @relation("CommentStudent")
+  rushRuns      RushRun[]
+  childLinks    ParentLink[]      @relation("LinkStudent")
+  parentLinks   ParentLink[]      @relation("LinkParent")
+
+  @@index([status])
+  @@map("users")
+}
+
+model Group {
+  id                 String        @id @default(cuid())
+  name               String
+  inviteCode         String        @unique
+  leaderboardEnabled Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  members            GroupMember[]
+  assignments        Assignment[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  groupId  String
+  userId   String
+  role     GroupRole @default(STUDENT)
+  joinedAt DateTime  @default(now())
+  group    Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model ParentLink {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  studentId String
+  parentId  String?
+  createdAt DateTime  @default(now())
+  linkedAt  DateTime?
+  student   User      @relation("LinkStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  parent    User?     @relation("LinkParent", fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@map("parent_links")
+}
+
+// ───────────────────────── Taksonomiya va savollar banki ─────────────────────────
+
+model Domain {
+  id        String             @id
+  section   Section
+  name      String
+  weight    Float              @default(0.25)
+  order     Int                @default(0)
+  skills    Skill[]
+  templates QuestionTemplate[]
+
+  @@map("domains")
+}
+
+model Skill {
+  id        String             @id
+  domainId  String
+  name      String
+  order     Int                @default(0)
+  domain    Domain             @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  templates QuestionTemplate[]
+  masteries SkillMastery[]
+
+  @@index([domainId])
+  @@map("skills")
+}
+
+model QuestionTemplate {
+  id            String             @id @default(cuid())
+  title         String
+  section       Section
+  domainId      String
+  skillId       String
+  difficulty    Difficulty
+  status        TemplateStatus     @default(DRAFT)
+  version       Int                @default(1)
+  spec          Json
+  rating        Float              @default(1200)
+  ratingGames   Int                @default(0)
+  timesAnswered Int                @default(0)
+  timesCorrect  Int                @default(0)
+  totalTimeMs   Float              @default(0)
+  similarIds    String[]           @default([])
+  tags          String[]           @default([])
+  imageId       String?
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  domain        Domain             @relation(fields: [domainId], references: [id])
+  skill         Skill              @relation(fields: [skillId], references: [id])
+  revisions     TemplateRevision[]
+  answers       AttemptAnswer[]
+  reports       Report[]
+  reviewItems   ReviewItem[]
+
+  @@index([status, section, domainId, skillId, difficulty])
+  @@index([status, rating])
+  @@map("question_templates")
+}
+
+/// Har bir tahrir yangi versiya — eski urinishlar aynan o'z variantini qayta tiklay oladi
+model TemplateRevision {
+  templateId  String
+  version     Int
+  spec        Json
+  createdById String?
+  createdAt   DateTime         @default(now())
+  template    QuestionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([templateId, version])
+  @@map("template_revisions")
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  mime        String
+  size        Int
+  data        Bytes
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@map("media")
+}
+
+// ───────────────────────── Testlar ─────────────────────────
+
+model Test {
+  id                String       @id @default(cuid())
+  title             String
+  description       String?
+  type              TestType
+  adaptive          Boolean      @default(false)
+  adaptiveThreshold Float        @default(0.6)
+  breakSeconds      Int          @default(600)
+  isPublic          Boolean      @default(false)
+  createdById       String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  modules           TestModule[]
+  assignments       Assignment[]
+  attempts          Attempt[]
+
+  @@map("tests")
+}
+
+/// order: modul "slot"i (RW1=0, RW2=1, MATH1=2, MATH2=3). Adaptiv 2-modulda bitta order uchun EASY va HARD bo'ladi.
+model TestModule {
+  id          String           @id @default(cuid())
+  testId      String
+  order       Int
+  section     Section
+  stage       Int              @default(1)
+  variant     ModuleVariant    @default(STANDARD)
+  durationSec Int
+  test        Test             @relation(fields: [testId], references: [id], onDelete: Cascade)
+  items       TestModuleItem[]
+
+  @@index([testId, order])
+  @@map("test_modules")
+}
+
+/// Aniq shablon (templateId) yoki savollar to'plami (pool: domen/ko'nikma/qiyinlik bo'yicha tasodifiy)
+model TestModuleItem {
+  id             String      @id @default(cuid())
+  moduleId       String
+  order          Int
+  templateId     String?
+  poolDomainId   String?
+  poolSkillId    String?
+  poolDifficulty Difficulty?
+  module         TestModule  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId, order])
+  @@map("test_module_items")
+}
+
+model Assignment {
+  id               String           @id @default(cuid())
+  testId           String
+  groupId          String
+  title            String
+  dueAt            DateTime?
+  maxAttempts      Int              @default(1)
+  resultVisibility ResultVisibility @default(IMMEDIATE)
+  createdById      String?
+  createdAt        DateTime         @default(now())
+  reminded24       Boolean          @default(false)
+  reminded2        Boolean          @default(false)
+  test             Test             @relation(fields: [testId], references: [id], onDelete: Cascade)
+  group            Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  attempts         Attempt[]
+
+  @@index([groupId])
+  @@index([dueAt])
+  @@map("assignments")
+}
+
+// ───────────────────────── Urinishlar ─────────────────────────
+
+model Attempt {
+  id            String          @id @default(cuid())
+  userId        String
+  mode          AttemptMode
+  status        AttemptStatus   @default(IN_PROGRESS)
+  title         String?
+  testId        String?
+  assignmentId  String?
+  duelId        String?
+  dailyDate     String?
+  startedAt     DateTime        @default(now())
+  finishedAt    DateTime?
+  deadlineAt    DateTime?
+  totalItems    Int             @default(0)
+  answeredCount Int             @default(0)
+  correctCount  Int             @default(0)
+  mistakes      Int             @default(0)
+  rwRaw         Int?
+  mathRaw       Int?
+  rwScaled      Int?
+  mathScaled    Int?
+  totalScaled   Int?
+  blurCount     Int             @default(0)
+  ratingDelta   Int             @default(0)
+  meta          Json?
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  test          Test?           @relation(fields: [testId], references: [id], onDelete: SetNull)
+  assignment    Assignment?     @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  duel          Duel?           @relation(fields: [duelId], references: [id], onDelete: SetNull)
+  modules       AttemptModule[]
+  answers       AttemptAnswer[]
+  rushRun       RushRun?
+
+  @@unique([userId, mode, dailyDate])
+  @@index([userId, mode, status])
+  @@index([assignmentId])
+  @@index([mode, dailyDate])
+  @@index([duelId])
+  @@map("attempts")
+}
+
+model AttemptModule {
+  id           String          @id @default(cuid())
+  attemptId    String
+  testModuleId String?
+  order        Int
+  section      Section?
+  stage        Int             @default(1)
+  variant      ModuleVariant   @default(STANDARD)
+  durationSec  Int?
+  startedAt    DateTime?
+  deadlineAt   DateTime?
+  submittedAt  DateTime?
+  correctCount Int             @default(0)
+  total        Int             @default(0)
+  attempt      Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  answers      AttemptAnswer[]
+
+  @@unique([attemptId, order])
+  @@map("attempt_modules")
+}
+
+/// Faqat template_id + versiya + seed + javob saqlanadi — variant istalgan vaqtda qayta tiklanadi
+model AttemptAnswer {
+  id              String           @id @default(cuid())
+  attemptId       String
+  attemptModuleId String?
+  order           Int
+  templateId      String
+  templateVersion Int
+  seed            Int
+  answer          String?
+  isCorrect       Boolean?
+  marked          Boolean          @default(false)
+  timeSpentMs     Int              @default(0)
+  answeredAt      DateTime?
+  ratingDelta     Int?
+  attempt         Attempt          @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  module          AttemptModule?   @relation(fields: [attemptModuleId], references: [id], onDelete: Cascade)
+  template        QuestionTemplate @relation(fields: [templateId], references: [id])
+
+  @@unique([attemptId, order])
+  @@index([templateId])
+  @@index([answeredAt])
+  @@map("attempt_answers")
+}
+
+model ScoreScale {
+  id      String        @id @default(cuid())
+  section Section
+  variant ModuleVariant
+  raw     Int
+  scaled  Int
+
+  @@unique([section, variant, raw])
+  @@map("score_scales")
+}
+
+// ───────────────────────── Moslashuv va reyting ─────────────────────────
+
+model SkillMastery {
+  userId    String
+  skillId   String
+  mastery   Float    @default(40)
+  correct   Int      @default(0)
+  wrong     Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+  @@map("student_skill_mastery")
+}
+
+model ReviewItem {
+  userId     String
+  templateId String
+  stage      Int              @default(0)
+  streak     Int              @default(0)
+  dueAt      DateTime
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template   QuestionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([userId, templateId])
+  @@index([userId, dueAt])
+  @@map("review_queue")
+}
+
+model Rating {
+  userId    String
+  type      RatingType
+  rating    Float      @default(1200)
+  games     Int        @default(0)
+  peak      Float      @default(1200)
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type])
+  @@index([type, rating])
+  @@map("ratings")
+}
+
+model RatingHistory {
+  id        String     @id @default(cuid())
+  userId    String
+  type      RatingType
+  rating    Float
+  delta     Float
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, createdAt])
+  @@index([type, createdAt])
+  @@map("rating_history")
+}
+
+model DailyTest {
+  date             String   @id
+  commonTemplateId String
+  createdAt        DateTime @default(now())
+
+  @@map("daily_tests")
+}
+
+model Streak {
+  userId       String  @id
+  current      Int     @default(0)
+  best         Int     @default(0)
+  lastDate     String?
+  freezeUsedAt String?
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("streaks")
+}
+
+model Duel {
+  id            String     @id @default(cuid())
+  code          String     @unique
+  status        DuelStatus @default(WAITING)
+  isPublic      Boolean    @default(false)
+  creatorId     String
+  opponentId    String?
+  creatorRating Float      @default(1200)
+  section       Section?
+  count         Int        @default(5)
+  templateIds   String[]   @default([])
+  winnerId      String?
+  startedAt     DateTime?
+  deadlineAt    DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  attempts      Attempt[]
+
+  @@index([status, isPublic, createdAt])
+  @@map("duels")
+}
+
+model RushRun {
+  id          String   @id @default(cuid())
+  userId      String
+  attemptId   String   @unique
+  durationSec Int
+  score       Int      @default(0)
+  mistakes    Int      @default(0)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempt     Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([durationSec, score])
+  @@index([userId])
+  @@map("puzzle_rush_runs")
+}
+
+model Achievement {
+  code        String            @id
+  name        String
+  description String
+  icon        String
+  order       Int               @default(0)
+  users       UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  userId      String
+  code        String
+  earnedAt    DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [code], references: [code], onDelete: Cascade)
+
+  @@id([userId, code])
+  @@map("user_achievements")
+}
+
+// ───────────────────────── Boshqaruv ─────────────────────────
+
+model Report {
+  id              String           @id @default(cuid())
+  userId          String
+  templateId      String
+  seed            Int?
+  templateVersion Int?
+  message         String
+  status          ReportStatus     @default(OPEN)
+  response        String?
+  resolvedById    String?
+  createdAt       DateTime         @default(now())
+  resolvedAt      DateTime?
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template        QuestionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("reports")
+}
+
+model TeacherComment {
+  id        String   @id @default(cuid())
+  teacherId String
+  studentId String
+  text      String
+  createdAt DateTime @default(now())
+  teacher   User     @relation("CommentTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  student   User     @relation("CommentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("teacher_comments")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  type      String
+  payload   Json?
+  status    String   @default("SENT")
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  diff      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}

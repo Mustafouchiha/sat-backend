@@ -1,0 +1,13 @@
+{
+  "name": "@sat/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Umumiy algoritmlar: Elo reyting, mastery, spaced repetition, avto-test, ball, streak, yutuqlar",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../.. packages/shared",
+    "typecheck": "tsc -p ."
+  }
+}

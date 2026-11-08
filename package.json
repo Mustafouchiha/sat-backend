@@ -1,0 +1,33 @@
+{
+  "name": "sat-miniapp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Digital SAT tayyorlov Telegram Mini App (o'quv markaz uchun) — monorepo",
+  "workspaces": [
+    "packages/*",
+    "apps/api"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p packages/generator && tsc -p packages/shared && tsc -p apps/api",
+    "dev:api": "npm run dev -w @sat/api",
+    "dev:web": "npm --prefix apps/miniapp run dev",
+    "build:api": "npm run build -w @sat/api",
+    "start:api": "npm run start -w @sat/api",
+    "db:generate": "npm run db:generate -w @sat/api",
+    "db:migrate": "npm run db:migrate -w @sat/api",
+    "db:seed": "npm run db:seed -w @sat/api"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}
