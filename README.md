@@ -19,7 +19,7 @@ Mini App (frontend) — [sat-frotend](https://github.com/Mustafouchiha/sat-frote
 | **Testlar** | Real SAT tuzilishi (R&W 2×27/32 daq, 10 daq tanaffus, Math 2×22/35 daq), **adaptiv 2-modul**, 200–800 / 400–1600 ball (shkala admin panelda), server taymeri, modulga qaytib bo'lmaydi, offline javob navbati |
 | **Test interfeysi** | Bluebook kabi: taymer (yashirish), Mark for Review, Answer Eliminator, savollar navigatori, kalkulyator (Desmos yoki ilmiy), formulalar varag'i, nusxa olishni cheklash, ilovadan chiqishni qayd qilish |
 | **Moslashuv** | Ko'nikma bo'yicha mastery (0–100%), spaced repetition (1/3/7/14 kun), avto-test 60/25/15 (zaif/o'rtacha/kuchli), "Men uchun" (reyting ±150, ~65% to'g'ri) |
-| **Reyting** | Chess kabi Elo: umumiy/Math/R&W, provisional (`?`), savolning ham reytingi, `+12`/`−8` animatsiya, unvonlar, taxminiy SAT, haftalik/oylik jadvallar |
+| **Reyting** | Elo reyting: umumiy/Math/R&W, provisional (`?`), savolning ham reytingi, `+12`/`−8` animatsiya, unvonlar, taxminiy SAT, haftalik/oylik jadvallar |
 | **O'yin** | Kunlik test (00:00 Toshkent, umumiy + shaxsiy qism), streak + freeze, Puzzle Rush (3/5 daq, 3 jon), Duel 1v1 (WebSocket), 21 ta yutuq, XP/daraja |
 | **O'qituvchi** | Guruhlar, taklif kodi, topshiriq (muddat, urinishlar, natija vaqti), o'quvchi profili, guruh tahlili (eng zaif ko'nikmalar), Excel eksport, izohlar, savol taklif qilish |
 | **Operator/Admin** | Shablon muharriri (forma + JSON), tayyor savoldan shablon, **Claude AI yordamchi**, preview (10 variant), avto/qo'lda test, rollar, ball shkalasi, sozlamalar, statistika, shikoyatlar, e'lonlar, audit, CSV/JSON import |

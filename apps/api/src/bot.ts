@@ -51,7 +51,7 @@ export function createBot(): Telegraf | null {
     }
     return ctx.reply(
       `Salom, ${escapeHtml(from.first_name ?? '')}! 👋\n\n<b>Digital SAT</b> ga tayyorlov ilovasiga xush kelibsiz.\n` +
-        `• Har kuni kunlik test va streak 🔥\n• Chess kabi reyting va duellar ⚔️\n• Har safar yangi sonli savollar 🎲\n\n` +
+        `• Har kuni kunlik test va streak 🔥\n• Reyting tizimi va duellar ⚔️\n• Har safar yangi sonli savollar 🎲\n\n` +
         `Boshlash uchun tugmani bosing. O'qituvchingizdan guruh taklif kodini oling.`,
       { parse_mode: 'HTML', ...openButton() },
     );
