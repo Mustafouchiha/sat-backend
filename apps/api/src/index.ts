@@ -16,10 +16,27 @@ import { initRealtime } from './lib/realtime';
 
 async function main() {
   const app = express();
-  const bot = createBot();
+  let bot = createBot();
+  let webhook = false;
+  if (bot) {
+    try {
+      // Webhook middleware JSON parserdan oldin ulanishi kerak
+      webhook = await attachWebhook(bot, app);
+    } catch (e) {
+      // Bot muammosi (noto'g'ri token, Telegram javob bermasligi) butun API'ni yiqitmasligi kerak.
+      // Xato obyektini to'liq chiqarmaymiz: TelegramError ichida webhook secret_token bor.
+      const unauthorized = (e as { response?: { error_code?: number } }).response?.error_code === 401;
+      console.error(
+        `❌ Telegram bot ishga tushmadi: ${(e as Error).message}` +
+          (unauthorized ? " — BOT_TOKEN noto'g'ri, BotFather'dagi token bilan solishtiring" : '') +
+          '. API botsiz ishlayapti.',
+      );
+      bot = null;
+    }
+  } else {
+    console.log("🤖 BOT_TOKEN yo'q — bot o'chirilgan");
+  }
   setBot(bot);
-  // Webhook middleware JSON parserdan oldin ulanishi kerak
-  const webhook = bot ? await attachWebhook(bot, app) : false;
   buildApp(app);
 
   const server = http.createServer(app);
@@ -38,7 +55,6 @@ async function main() {
   });
 
   if (bot) await finishBotSetup(bot, webhook);
-  else console.log('🤖 BOT_TOKEN yo\'q — bot o\'chirilgan');
   if (env.cronEnabled) startCron();
 
   const shutdown = async (signal: string) => {
