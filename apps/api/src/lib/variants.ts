@@ -30,6 +30,9 @@ class Lru<K, V> {
       if (!first.done) this.m.delete(first.value);
     }
   }
+  delete(k: K): void {
+    this.m.delete(k);
+  }
 }
 
 // Revision spec'lari o'zgarmaydi — xavfsiz keshlanadi
@@ -45,18 +48,28 @@ export interface VariantRef {
 
 async function loadSpecs(refs: Array<Pick<VariantRef, 'templateId' | 'templateVersion'>>): Promise<void> {
   const missing = refs.filter((r) => !specCache.get(`${r.templateId}:${r.templateVersion}`));
-  if (!missing.length) return;
-  const uniq = [...new Map(missing.map((r) => [`${r.templateId}:${r.templateVersion}`, r])).values()];
-  const revs = await prisma.templateRevision.findMany({
-    where: { OR: uniq.map((r) => ({ templateId: r.templateId, version: r.templateVersion })) },
-  });
-  for (const rev of revs) specCache.set(`${rev.templateId}:${rev.version}`, parseSpec(rev.spec));
-  const metas = await prisma.questionTemplate.findMany({
-    where: { id: { in: [...new Set(uniq.map((r) => r.templateId))] } },
-    select: { id: true, imageId: true },
-  });
-  for (const m of metas) metaCache.set(m.id, { imageId: m.imageId });
+  if (missing.length) {
+    const uniq = [...new Map(missing.map((r) => [`${r.templateId}:${r.templateVersion}`, r])).values()];
+    const revs = await prisma.templateRevision.findMany({
+      where: { OR: uniq.map((r) => ({ templateId: r.templateId, version: r.templateVersion })) },
+    });
+    for (const rev of revs) specCache.set(`${rev.templateId}:${rev.version}`, parseSpec(rev.spec));
+  }
+  // Rasm versiyalanmaydi: operator uni almashtirsa, kesh tozalanadi va shu yerda qayta o'qiladi
+  const ids = [...new Set(refs.map((r) => r.templateId))].filter((id) => !metaCache.get(id));
+  if (ids.length) {
+    const metas = await prisma.questionTemplate.findMany({ where: { id: { in: ids } }, select: { id: true, imageId: true } });
+    for (const m of metas) metaCache.set(m.id, { imageId: m.imageId });
+  }
 }
+
+/** Shablon rasmi o'zgarganda chaqiriladi — keyingi so'rov yangi rasmni oladi. */
+export function forgetTemplateMeta(templateId: string): void {
+  metaCache.delete(templateId);
+}
+
+/** Shablon rasmi URL'i (preview va shikoyatni ko'rish uchun). */
+export const mediaPath = (imageId: string | null | undefined) => (imageId ? `/api/media/${imageId}` : undefined);
 
 export async function getSpec(templateId: string, version: number): Promise<TemplateSpec> {
   await loadSpecs([{ templateId, templateVersion: version }]);
@@ -89,8 +102,7 @@ export interface ClientQuestion extends PublicQuestion {
 }
 
 export function publicQuestion(v: Variant, templateId: string): ClientQuestion {
-  const meta = metaCache.get(templateId);
-  return { ...toPublicQuestion(v), imageUrl: meta?.imageId ? `/api/media/${meta.imageId}` : undefined };
+  return { ...toPublicQuestion(v), imageUrl: mediaPath(metaCache.get(templateId)?.imageId) };
 }
 
 export function grade(v: Variant, answer: string | null | undefined): boolean {

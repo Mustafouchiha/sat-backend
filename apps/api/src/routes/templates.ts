@@ -19,7 +19,7 @@ import { hasRole, me, requireAuth, requireRole, type AuthUser } from '../lib/aut
 import { invalidateCatalog } from '../lib/catalog';
 import { ah, forbidden, HttpError, notFound, pageParams, parse, str } from '../lib/http';
 import { notifyUser } from '../lib/notify';
-import { getSpec } from '../lib/variants';
+import { forgetTemplateMeta, getSpec, mediaPath } from '../lib/variants';
 
 export const templatesRouter = Router();
 templatesRouter.use(requireAuth, requireRole('OPERATOR', 'TEACHER'));
@@ -154,13 +154,29 @@ templatesRouter.post(
   }),
 );
 
-/** Ixtiyoriy AI yordamchi (Claude): taklif qaytaradi, SAQLAMAYDI. */
+const aiBody = z
+  .object({
+    text: z.string().max(8000).optional(),
+    // Savol rasmi (skrinshot/foto): brauzer uni 2576 px gacha kichraytirib yuboradi
+    image: z
+      .object({
+        mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+        data: z.string().min(100).max(4_500_000),
+      })
+      .optional(),
+    section: sectionE.optional(),
+  })
+  .refine((b) => b.image || (b.text?.trim().length ?? 0) >= 10, { message: 'Savol matni (kamida 10 belgi) yoki rasm kerak' });
+
+/** Ixtiyoriy AI yordamchi (Claude): matn yoki rasmdan shablon taklifi qaytaradi, SAQLAMAYDI. */
 templatesRouter.post(
   '/ai-suggest',
   requireRole('OPERATOR'),
   ah(async (req, res) => {
-    const body = parse(z.object({ text: z.string().min(10).max(8000), section: sectionE.optional() }), req.body);
-    res.json(await suggestTemplate(body.text, body.section));
+    const body = parse(aiBody, req.body);
+    const image = body.image && { mime: body.image.mime, data: body.image.data.replace(/^data:[^;]+;base64,/, '') };
+    if (image && Buffer.byteLength(image.data, 'base64') > 3_500_000) throw new HttpError(413, 'Rasm juda katta (3.5 MB gacha)');
+    res.json(await suggestTemplate({ text: body.text, image, section: body.section }));
   }),
 );
 
@@ -380,9 +396,10 @@ templatesRouter.put(
     await audit(u.id, 'UPDATE', 'template', t.id, {
       specChanged,
       version,
-      before: { title: existing.title, status: existing.status, difficulty: existing.difficulty },
-      after: { title: t.title, status: t.status, difficulty: t.difficulty },
+      before: { title: existing.title, status: existing.status, difficulty: existing.difficulty, imageId: existing.imageId },
+      after: { title: t.title, status: t.status, difficulty: t.difficulty, imageId: t.imageId },
     });
+    if (t.imageId !== existing.imageId) forgetTemplateMeta(t.id);
     invalidateCatalog();
     res.json(t);
   }),
@@ -459,9 +476,9 @@ templatesRouter.get(
   '/:id/variant',
   ah(async (req, res) => {
     const q = parse(z.object({ seed: z.coerce.number().int(), version: z.coerce.number().int().optional() }), req.query);
-    const t = await prisma.questionTemplate.findUnique({ where: { id: req.params.id }, select: { version: true } });
+    const t = await prisma.questionTemplate.findUnique({ where: { id: req.params.id }, select: { version: true, imageId: true } });
     if (!t) throw notFound('Shablon');
     const spec = await getSpec(req.params.id, q.version ?? t.version);
-    res.json(generateVariant(spec, q.seed));
+    res.json({ ...generateVariant(spec, q.seed), imageUrl: mediaPath(t.imageId) });
   }),
 );
