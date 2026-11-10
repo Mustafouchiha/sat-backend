@@ -19,6 +19,7 @@ import { sessionsRouter } from './routes/sessions';
 import { studentsRouter } from './routes/students';
 import { templatesRouter } from './routes/templates';
 import { testsRouter } from './routes/tests';
+import { webLoginRouter } from './routes/webLogin';
 
 function originAllowed(origin: string): boolean {
   const o = origin.replace(/\/+$/, '');
@@ -54,6 +55,7 @@ export function buildApp(app: Express): Express {
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 1500, standardHeaders: 'draft-7', legacyHeaders: false }));
   app.use('/api/auth', rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false }), authRouter);
   app.use('/api/templates/ai-suggest', rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }));
+  app.use('/api/web-login', webLoginRouter);
 
   app.use('/api/me', meRouter);
   app.use('/api/templates', templatesRouter);

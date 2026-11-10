@@ -5,12 +5,17 @@ import { prisma } from '../db';
 import { env } from '../env';
 import { me, requireAuth } from '../lib/auth';
 import { ah, HttpError, notFound, parse, randomCode } from '../lib/http';
+import { getBotUsername } from '../lib/notify';
 import { getSettings } from '../lib/settings';
 import { publicUser, userStats } from '../lib/users';
 import { getVariant, reviewQuestion } from '../lib/variants';
+import { maskPhone } from '../lib/webLogin';
 
 export const meRouter = Router();
 meRouter.use(requireAuth);
+
+/** Foydalanuvchining o'ziga: telefon raqam yashirilgan holda (kompyuterda kirish uchun ulanganini ko'rsatish). */
+const selfUser = (user: Parameters<typeof publicUser>[0]) => ({ ...publicUser(user), phone: maskPhone(user.phone) });
 
 meRouter.get(
   '/',
@@ -22,10 +27,10 @@ meRouter.get(
       prisma.groupMember.findMany({ where: { userId: u.id }, include: { group: { select: { id: true, name: true } } } }),
     ]);
     res.json({
-      user: publicUser(user),
+      user: selfUser(user),
       stats,
       groups: groups.map((g) => ({ id: g.group.id, name: g.group.name, role: g.role })),
-      config: { botUsername: env.BOT_USERNAME ?? null, desmosKey: env.DESMOS_API_KEY ?? null },
+      config: { botUsername: getBotUsername(), desmosKey: env.DESMOS_API_KEY ?? null },
     });
   }),
 );
@@ -51,7 +56,7 @@ meRouter.patch(
         ...(body.notifyDaily !== undefined ? { notifyDaily: body.notifyDaily } : {}),
       },
     });
-    res.json({ user: publicUser(user) });
+    res.json({ user: selfUser(user) });
   }),
 );
 
@@ -72,7 +77,7 @@ meRouter.post(
       where: { id: u.id },
       data: { status: u.status === 'BLOCKED' ? 'BLOCKED' : 'ACTIVE' },
     });
-    res.json({ user: publicUser(user), group: { id: group.id, name: group.name } });
+    res.json({ user: selfUser(user), group: { id: group.id, name: group.name } });
   }),
 );
 
@@ -115,7 +120,7 @@ meRouter.get(
       ? Math.max(0, Math.ceil((user.examDate.getTime() - tashkentDayStart(today).getTime()) / 86400_000))
       : null;
     res.json({
-      user: publicUser(user),
+      user: selfUser(user),
       stats,
       daily: {
         date: today,

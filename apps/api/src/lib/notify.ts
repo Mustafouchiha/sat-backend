@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { env } from '../env';
 
 let botRef: Telegraf | null = null;
+let botUsernameRef: string | null = null;
 
 export function setBot(bot: Telegraf | null): void {
   botRef = bot;
@@ -10,6 +11,15 @@ export function setBot(bot: Telegraf | null): void {
 
 export function getBot(): Telegraf | null {
   return botRef;
+}
+
+/** Bot ishga tushganda getMe() dan olinadi; bo'lmasa BOT_USERNAME. */
+export function setBotUsername(username: string | null | undefined): void {
+  botUsernameRef = username ?? null;
+}
+
+export function getBotUsername(): string | null {
+  return botUsernameRef ?? env.BOT_USERNAME ?? null;
 }
 
 export function appUrl(params?: Record<string, string>): string {

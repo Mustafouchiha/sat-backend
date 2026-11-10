@@ -103,6 +103,18 @@ enum DuelStatus {
   CANCELLED
 }
 
+enum WebLoginKind {
+  QR
+  PHONE
+}
+
+enum WebLoginStatus {
+  PENDING
+  APPROVED
+  USED
+  REJECTED
+}
+
 // ───────────────────────── Foydalanuvchilar va guruhlar ─────────────────────────
 
 model User {
@@ -122,6 +134,8 @@ model User {
   correctTotal  Int        @default(0)
   notifyDaily   Boolean    @default(true)
   botBlocked    Boolean    @default(false)
+  /// Kompyuterda telefon raqam bilan kirish uchun (faqat raqamlar, masalan 998901234567). Botda «Raqamni ulashish» orqali ulanadi.
+  phone         String?    @unique
   createdAt     DateTime   @default(now())
   lastSeenAt    DateTime?
 
@@ -139,9 +153,34 @@ model User {
   rushRuns      RushRun[]
   childLinks    ParentLink[]      @relation("LinkStudent")
   parentLinks   ParentLink[]      @relation("LinkParent")
+  webLogins     WebLogin[]
 
   @@index([status])
   @@map("users")
+}
+
+/// Kompyuterdagi brauzer uchun kirish so'rovi: QR kod (telefonda bot orqali tasdiqlanadi) yoki telefon raqam + kod.
+model WebLogin {
+  /// Tasodifiy (128 bit) — QR havolasida ko'rinadi
+  id         String         @id
+  /// Faqat so'rovni yaratgan brauzer biladigan sir (sha256) — token faqat o'sha brauzerga beriladi
+  secretHash String
+  kind       WebLoginKind
+  status     WebLoginStatus @default(PENDING)
+  phone      String?
+  userId     String?
+  user       User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// PHONE: sha256("id:kod")
+  codeHash   String?
+  attempts   Int            @default(0)
+  /// Brauzer va OS — telefondagi tasdiqlash xabarida ko'rsatiladi
+  device     String
+  expiresAt  DateTime
+  createdAt  DateTime       @default(now())
+
+  @@index([phone, createdAt])
+  @@index([expiresAt])
+  @@map("web_logins")
 }
 
 model Group {
