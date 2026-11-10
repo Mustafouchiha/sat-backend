@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { Prisma } from '@prisma/client';
-import { DEFAULT_SETTINGS, displayRating, effectiveStreak, tashkentDate, TAXONOMY } from '@sat/shared';
+import { displayRating, effectiveStreak, tashkentDate, TAXONOMY } from '@sat/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
@@ -8,6 +8,7 @@ import { assertGroupAccess } from '../lib/access';
 import { audit } from '../lib/audit';
 import { hasRole, me, requireAuth, requireRole } from '../lib/auth';
 import { ah, forbidden, HttpError, notFound, parse, randomCode } from '../lib/http';
+import { getSettings } from '../lib/settings';
 import { displayName } from '../lib/users';
 
 const require = createRequire(import.meta.url);
@@ -122,6 +123,7 @@ groupsRouter.delete(
 );
 
 async function groupStudents(groupId: string) {
+  const s = await getSettings();
   const members = await prisma.groupMember.findMany({
     where: { groupId, role: 'STUDENT' },
     include: { user: { include: { ratings: true, streak: true } } },
@@ -138,9 +140,9 @@ async function groupStudents(groupId: string) {
   ]);
   const today = tashkentDate();
   return members.map((m) => {
-    // SAT shkalasi: umumiy 400–1600, Math va R&W 200–800
+    // SAT shkalasi: umumiy 400–1600, Math va R&W 200–800 (10 ga karrali)
     const r = (t: 'OVERALL' | 'MATH' | 'RW') =>
-      displayRating(t, m.user.ratings.find((x) => x.type === t)?.rating ?? DEFAULT_SETTINGS.rating.initial);
+      displayRating(t, m.user.ratings.find((x) => x.type === t)?.rating ?? s.rating.initial, s.ratingToSat);
     return {
       id: m.user.id,
       name: displayName(m.user),

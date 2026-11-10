@@ -63,7 +63,7 @@ leaderboardRouter.get(
         userId: r.userId,
         name: displayName(r.user),
         photoUrl: r.user.photoUrl,
-        value: displayRating(type, r.rating),
+        value: displayRating(type, r.rating, s.ratingToSat),
         title: titleFor(r.rating, s.titles),
         provisional: isProvisional(r.games, s.rating),
       }));

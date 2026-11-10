@@ -168,7 +168,8 @@ export async function ratingHistory(userId: string, type: 'OVERALL' | 'MATH' | '
     select: { rating: true, delta: true, createdAt: true },
   });
   const byDay = new Map<string, number>();
-  for (const r of rows) byDay.set(tashkentDate(r.createdAt), displayRating(type, r.rating));
+  const s = await getSettings();
+  for (const r of rows) byDay.set(tashkentDate(r.createdAt), displayRating(type, r.rating, s.ratingToSat));
   const f = ratingFactor(type);
   const dayAgo = Date.now() - 86400_000;
   const weekAgo = Date.now() - 7 * 86400_000;
@@ -176,8 +177,8 @@ export async function ratingHistory(userId: string, type: 'OVERALL' | 'MATH' | '
   return {
     type,
     points: [...byDay].map(([date, rating]) => ({ date, rating })),
-    current: current ? displayRating(type, current.rating) : null,
-    peak: current ? displayRating(type, current.peak) : null,
+    current: current ? displayRating(type, current.rating, s.ratingToSat) : null,
+    peak: current ? displayRating(type, current.peak, s.ratingToSat) : null,
     dayChange: Math.round(f * rows.filter((r) => r.createdAt.getTime() >= dayAgo).reduce((s, r) => s + r.delta, 0)),
     weekChange: Math.round(f * rows.filter((r) => r.createdAt.getTime() >= weekAgo).reduce((s, r) => s + r.delta, 0)),
   };

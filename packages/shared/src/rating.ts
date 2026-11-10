@@ -85,23 +85,28 @@ export function estimateSat(rating: number, table: Array<[number, number]>): num
 export type RatingKind = 'OVERALL' | 'MATH' | 'RW';
 
 /**
- * Reyting o'quvchiga SAT shkalasida ko'rsatiladi: umumiy 400–1600, bo'lim (Math, R&W) 200–800.
- * Ichkarida bitta Elo shkalasi ishlaydi; bo'lim reytingi ko'rsatishda 2 ga bo'linadi.
+ * Reyting o'quvchiga SAT shkalasida ko'rsatiladi:
+ *  - OVERALL — umumiy reyting 400–1600, aniq son (har javobdagi o'zgarish ko'rinsin);
+ *  - MATH / RW — bo'lim bali 200–800, doim 10 ga karrali (ichki Elo qiymatining yarmi).
  */
 export function ratingFactor(type: RatingKind): number {
   return type === 'OVERALL' ? 1 : 0.5;
 }
 
-export function displayRating(type: RatingKind, rating: number): number {
-  const [lo, hi] = type === 'OVERALL' ? [400, 1600] : [200, 800];
-  return clamp(Math.round(rating * ratingFactor(type)), lo, hi);
+const IDENTITY_TABLE: Array<[number, number]> = [
+  [400, 400],
+  [1600, 1600],
+];
+
+export function displayRating(type: RatingKind, rating: number, table: Array<[number, number]> = IDENTITY_TABLE): number {
+  if (type === 'OVERALL') return clamp(Math.round(rating), 400, 1600);
+  // Yaxlitlanmagan bahoning yarmi, keyin 10 ga (ikki marta yaxlitlash xatosisiz): 1517 -> 760, 1238 -> 620
+  return clamp(Math.round(interpolateSat(rating, table) / 20) * 10, 200, 800);
 }
 
-/** Taxminiy ball: umumiy 400–1600, bo'lim 200–800 (10 ga yaxlitlangan). */
-export function displayEstimate(type: RatingKind, rating: number, table: Array<[number, number]>): number {
-  if (type === 'OVERALL') return estimateSat(rating, table);
-  // Bo'lim: yaxlitlanmagan umumiy bahoning yarmi, keyin 10 ga (ikki marta yaxlitlash xatosisiz)
-  return clamp(Math.round(interpolateSat(rating, table) / 20) * 10, 200, 800);
+/** Taxminiy SAT = Math bali + R&W bali (400–1600, doim 10 ga karrali). */
+export function estimatedTotal(math: number, rw: number, table: Array<[number, number]> = IDENTITY_TABLE): number {
+  return displayRating('MATH', math, table) + displayRating('RW', rw, table);
 }
 
 export type DifficultyLabel = 'EASY' | 'MEDIUM' | 'HARD';

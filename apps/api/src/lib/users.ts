@@ -1,7 +1,7 @@
 import type { Rating, RatingType, User } from '@prisma/client';
 import {
-  displayEstimate,
   displayRating,
+  estimateSat,
   effectiveStreak,
   isProvisional,
   levelFromXp,
@@ -60,15 +60,19 @@ export async function ensureRatings(userId: string): Promise<Record<RatingType, 
   return Object.fromEntries(rows.map((r) => [r.type, r])) as Record<RatingType, Rating>;
 }
 
-/** O'quvchiga ko'rsatiladigan reyting: umumiy 400–1600, Math va R&W 200–800 (SAT shkalasi). */
+/**
+ * O'quvchiga ko'rsatiladigan reyting (SAT shkalasi): umumiy reyting 400–1600 aniq son,
+ * Math va R&W — 200–800, doim 10 ga karrali. Bo'limning taxminiy bali — bo'lim balining o'zi.
+ */
 export function ratingView(r: Pick<Rating, 'rating' | 'games' | 'peak'>, s: AppSettings, type: RatingType = 'OVERALL') {
+  const rating = displayRating(type, r.rating, s.ratingToSat);
   return {
-    rating: displayRating(type, r.rating),
+    rating,
     games: r.games,
-    peak: displayRating(type, r.peak),
+    peak: displayRating(type, r.peak, s.ratingToSat),
     provisional: isProvisional(r.games, s.rating),
     title: titleFor(r.rating, s.titles),
-    estimatedSat: displayEstimate(type, r.rating, s.ratingToSat),
+    estimatedSat: type === 'OVERALL' ? estimateSat(r.rating, s.ratingToSat) : rating,
   };
 }
 
@@ -80,11 +84,14 @@ export async function userStats(userId: string) {
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { xp: true } }),
   ]);
   const today = tashkentDate();
+  const math = ratingView(ratings.MATH, s, 'MATH');
+  const rw = ratingView(ratings.RW, s, 'RW');
   return {
     ratings: {
-      OVERALL: ratingView(ratings.OVERALL, s),
-      MATH: ratingView(ratings.MATH, s, 'MATH'),
-      RW: ratingView(ratings.RW, s, 'RW'),
+      // Taxminiy SAT = Math + R&W (ikkalasi 10 ga yaxlitlangan, shuning uchun yig'indi ham 0 bilan tugaydi)
+      OVERALL: { ...ratingView(ratings.OVERALL, s), estimatedSat: math.rating + rw.rating },
+      MATH: math,
+      RW: rw,
     },
     streak: {
       current: effectiveStreak(streak, today),

@@ -6,7 +6,6 @@ import {
   bucketOf,
   DEFAULT_SETTINGS,
   deepMerge,
-  displayEstimate,
   displayRating,
   distributeByWeight,
   earnedAchievements,
@@ -14,6 +13,7 @@ import {
   effectiveStreak,
   eloUpdate,
   estimateSat,
+  estimatedTotal,
   expectedScore,
   levelFromXp,
   pickForMe,
@@ -98,11 +98,24 @@ describe('Elo reyting', () => {
     const low = eloUpdate({ userRating: 400, userGames: 50, questionRating: 1000, questionGames: 100, correct: false }, S.rating);
     expect(low.userRating).toBe(400);
     expect(displayRating('OVERALL', 1700)).toBe(1600);
-    expect(displayRating('MATH', 1213)).toBe(607);
+    expect(displayRating('OVERALL', 963)).toBe(963); // umumiy reyting aniq son
+    expect(displayRating('MATH', 1213, S.ratingToSat)).toBe(610); // 606.5 -> 610
+    expect(displayRating('RW', 1026, S.ratingToSat)).toBe(510); // 513 -> 510, ikki marta yaxlitlanmaydi
     expect(displayRating('RW', 300)).toBe(200);
-    expect(displayEstimate('OVERALL', 1213, S.ratingToSat)).toBe(1210);
-    expect(displayEstimate('MATH', 1213, S.ratingToSat)).toBe(610);
-    expect(displayEstimate('RW', 1026, S.ratingToSat)).toBe(510); // 513 -> 510, ikki marta yaxlitlanmaydi
+  });
+
+  it('taxminiy SAT = Math + R&W, ballar doim 0 bilan tugaydi', () => {
+    // Math 758.5 -> 760, R&W 619 -> 620, jami 1380
+    expect(estimatedTotal(1517, 1238, S.ratingToSat)).toBe(1380);
+    for (let m = 400; m <= 1600; m += 37) {
+      for (let r = 400; r <= 1600; r += 41) {
+        const total = estimatedTotal(m, r, S.ratingToSat);
+        expect(total % 10).toBe(0);
+        expect(total).toBeGreaterThanOrEqual(400);
+        expect(total).toBeLessThanOrEqual(1600);
+        expect(total).toBe(displayRating('MATH', m, S.ratingToSat) + displayRating('RW', r, S.ratingToSat));
+      }
+    }
   });
 
   it('amaldagi qiyinlik: statistika yetarli bo‘lsa reyting bo‘yicha', () => {
