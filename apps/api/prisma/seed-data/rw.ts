@@ -1,4 +1,5 @@
 import { barChart } from './figures';
+import { RW_HARD_TEMPLATES } from './rw-hard';
 import { RW_MORE_TEMPLATES } from './rw-more';
 import type { SeedTemplate } from './types';
 
@@ -246,4 +247,5 @@ export const RW_TEMPLATES: SeedTemplate[] = [
   },
 
   ...RW_MORE_TEMPLATES,
+  ...RW_HARD_TEMPLATES,
 ];

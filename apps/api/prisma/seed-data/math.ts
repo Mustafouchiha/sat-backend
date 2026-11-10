@@ -1,5 +1,6 @@
 import { DASH, END, MID, seg, svg, txt } from './figures';
 import { MATH_FIGURE_TEMPLATES } from './math-figures';
+import { MATH_HARD_TEMPLATES } from './math-hard';
 import type { SeedTemplate } from './types';
 
 /** Nuqtali grafik: soatlar 0–16, ball 0–100, nuqtalar va eng yaxshi moslik chizig'i y = m·x + b. */
@@ -619,4 +620,7 @@ export const MATH_TEMPLATES: SeedTemplate[] = [
 
   // Rasmli shablonlar: geometriya chizmalari, grafiklar, diagramma va jadvallar
   ...MATH_FIGURE_TEMPLATES,
+
+  // Qiyin (HARD) shablonlar — adaptiv testning qiyin 2-moduli uchun
+  ...MATH_HARD_TEMPLATES,
 ];

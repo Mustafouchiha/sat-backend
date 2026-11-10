@@ -151,6 +151,26 @@ export function table(rows: string[][], widths: number[], rowH = 30): string {
   return svg(W + 2, H + 2, p.join(''));
 }
 
+/** Ikki guruhning nuqtali diagrammasi bir rasmda, bir xil o'q bilan (har qiymatda eng ko'pi 6 ta nuqta). 300×270 */
+export function dotPlotPair(o: { a: string[]; b: string[]; labels: string[]; names: [string, string]; title: string }): string {
+  const x0 = 50;
+  const step = 200 / (o.labels.length - 1);
+  const block = (counts: string[], top: number, name: string) => {
+    const base = top + 99;
+    const p: string[] = [txt(8, top + 12, name, 'font-weight="bold"', 12), seg(x0 - 25, base, x0 + 225, base, 'stroke-width="1.5"')];
+    o.labels.forEach((lab, i) => {
+      const x = x0 + i * step;
+      p.push(seg(x, base, x, base + 5, 'stroke-width="1.5"'));
+      p.push(txt(x, base + 17, lab, MID, 11));
+      for (let j = 0; j < 6; j++) {
+        p.push(`<circle cx="${x}" cy="${base - 9 - j * 13}" r="5" fill="currentColor" fill-opacity="{=(${counts[i]}) > ${j} ? 1 : 0}"/>`);
+      }
+    });
+    return p.join('');
+  };
+  return svg(300, 270, block(o.a, 0, o.names[0]) + block(o.b, 125, o.names[1]) + txt(150, 262, o.title, MID, 12));
+}
+
 /** Nuqtali diagramma (dot plot): har qiymat ustida counts[i] ta nuqta (eng ko'pi maxDots). */
 export function dotPlot(o: { counts: string[]; labels: string[]; maxDots: number; title: string }): string {
   const x0 = 40;
