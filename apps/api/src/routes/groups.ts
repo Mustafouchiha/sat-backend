@@ -57,7 +57,10 @@ groupsRouter.patch(
   ah(async (req, res) => {
     const u = me(req);
     await assertGroupAccess(u, req.params.id);
-    const body = parse(z.object({ name: z.string().min(1).max(100).optional(), leaderboardEnabled: z.boolean().optional() }), req.body);
+    const body = parse(
+      z.object({ name: z.string().min(1).max(100).optional(), leaderboardEnabled: z.boolean().optional(), openJoin: z.boolean().optional() }),
+      req.body,
+    );
     if (body.name && !hasRole(u, 'OPERATOR')) throw forbidden("Guruh nomini faqat operator o'zgartira oladi");
     const g = await prisma.group.update({ where: { id: req.params.id }, data: body });
     await audit(u.id, 'UPDATE', 'group', g.id, body);
@@ -81,6 +84,78 @@ groupsRouter.post(
     await assertGroupAccess(me(req), req.params.id);
     const g = await prisma.group.update({ where: { id: req.params.id }, data: { inviteCode: randomCode(6) } });
     res.json({ inviteCode: g.inviteCode });
+  }),
+);
+
+// ───────────── Shaxsiy kirish kodlari: har o'quvchiga alohida, bir martalik ─────────────
+
+const inviteInclude = { usedBy: { select: { id: true, firstName: true, lastName: true, username: true } } } as const;
+type InviteRow = Prisma.GroupInviteGetPayload<{ include: typeof inviteInclude }>;
+const inviteView = (i: InviteRow) => ({
+  id: i.id,
+  code: i.code,
+  label: i.label,
+  createdAt: i.createdAt,
+  usedAt: i.usedAt,
+  usedBy: i.usedBy ? { id: i.usedBy.id, name: displayName(i.usedBy), username: i.usedBy.username } : null,
+});
+
+groupsRouter.get(
+  '/:id/invites',
+  ah(async (req, res) => {
+    await assertGroupAccess(me(req), req.params.id);
+    const list = await prisma.groupInvite.findMany({ where: { groupId: req.params.id }, orderBy: { createdAt: 'asc' }, include: inviteInclude });
+    res.json(list.map(inviteView));
+  }),
+);
+
+/** Ismlar ro'yxati bo'yicha (har biriga bittadan) yoki ismsiz N ta kod. */
+groupsRouter.post(
+  '/:id/invites',
+  ah(async (req, res) => {
+    const u = me(req);
+    await assertGroupAccess(u, req.params.id);
+    const body = parse(
+      z.object({
+        labels: z.array(z.string().max(60)).max(100).optional(),
+        count: z.number().int().min(1).max(100).optional(),
+      }),
+      req.body,
+    );
+    const labels = (body.labels ?? []).map((s) => s.trim()).filter(Boolean);
+    const items: Array<string | null> = labels.length ? labels : Array.from({ length: body.count ?? 0 }, () => null);
+    if (!items.length) throw new HttpError(400, "O'quvchilar ismlari yoki kodlar sonini kiriting");
+    const existing = await prisma.groupInvite.count({ where: { groupId: req.params.id } });
+    if (existing + items.length > 500) throw new HttpError(400, "Bitta guruhda 500 tadan ortiq shaxsiy kod bo'lmaydi");
+    const created: InviteRow[] = [];
+    for (const label of items) {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          created.push(
+            await prisma.groupInvite.create({ data: { groupId: req.params.id, code: randomCode(8), label, createdById: u.id }, include: inviteInclude }),
+          );
+          break;
+        } catch (e) {
+          // Kod takrorlanib qolsa (juda kam ehtimol) — yangisini olamiz
+          if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') || attempt >= 4) throw e;
+        }
+      }
+    }
+    await audit(u.id, 'CREATE_INVITES', 'group', req.params.id, { count: created.length });
+    res.status(201).json(created.map(inviteView));
+  }),
+);
+
+groupsRouter.delete(
+  '/:id/invites/:inviteId',
+  ah(async (req, res) => {
+    const u = me(req);
+    await assertGroupAccess(u, req.params.id);
+    const inv = await prisma.groupInvite.findUnique({ where: { id: req.params.inviteId } });
+    if (!inv || inv.groupId !== req.params.id) throw notFound('Kod');
+    if (inv.usedById) throw new HttpError(400, "Ishlatilgan kodni o'chirib bo'lmaydi — kerak bo'lsa o'quvchini guruhdan chiqaring", 'CODE_USED');
+    await prisma.groupInvite.delete({ where: { id: inv.id } });
+    res.json({ deleted: true });
   }),
 );
 

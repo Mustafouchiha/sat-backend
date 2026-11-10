@@ -136,6 +136,8 @@ model User {
   botBlocked    Boolean    @default(false)
   /// Kompyuterda telefon raqam bilan kirish uchun (faqat raqamlar, masalan 998901234567). Botda «Raqamni ulashish» orqali ulanadi.
   phone         String?    @unique
+  /// Ilova ko'rinishi: { mode: auto|light|dark, bg?, card?, text?, line?, accent? } (ranglar #rrggbb)
+  theme         Json?
   createdAt     DateTime   @default(now())
   lastSeenAt    DateTime?
 
@@ -154,6 +156,7 @@ model User {
   childLinks    ParentLink[]      @relation("LinkStudent")
   parentLinks   ParentLink[]      @relation("LinkParent")
   webLogins     WebLogin[]
+  usedInvites   GroupInvite[]     @relation("InviteUsedBy")
 
   @@index([status])
   @@map("users")
@@ -188,11 +191,33 @@ model Group {
   name               String
   inviteCode         String        @unique
   leaderboardEnabled Boolean       @default(true)
+  /// Umumiy taklif kodi ishlaydimi; o'chirilsa — faqat shaxsiy kodlar bilan qo'shiladi
+  openJoin           Boolean       @default(true)
   createdAt          DateTime      @default(now())
   members            GroupMember[]
   assignments        Assignment[]
+  invites            GroupInvite[]
 
   @@map("groups")
+}
+
+/// O'quvchi uchun shaxsiy, bir martalik kirish kodi (o'qituvchi yaratadi)
+model GroupInvite {
+  id          String    @id @default(cuid())
+  groupId     String
+  group       Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// 8 belgi — 6 belgili guruh kodlari bilan aralashmaydi
+  code        String    @unique
+  /// Kimga berilgani (o'qituvchi yozgan ism)
+  label       String?
+  createdById String?
+  usedById    String?
+  usedBy      User?     @relation("InviteUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([groupId])
+  @@map("group_invites")
 }
 
 model GroupMember {

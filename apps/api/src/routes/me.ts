@@ -1,4 +1,6 @@
+import { Prisma } from '@prisma/client';
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { bucketOf, displayRating, ratingFactor, tashkentDate, tashkentDayStart, TAXONOMY } from '@sat/shared';
 import { prisma } from '../db';
@@ -14,8 +16,30 @@ import { maskPhone } from '../lib/webLogin';
 export const meRouter = Router();
 meRouter.use(requireAuth);
 
-/** Foydalanuvchining o'ziga: telefon raqam yashirilgan holda (kompyuterda kirish uchun ulanganini ko'rsatish). */
-const selfUser = (user: Parameters<typeof publicUser>[0]) => ({ ...publicUser(user), phone: maskPhone(user.phone) });
+/** Foydalanuvchining o'ziga: telefon raqam yashirilgan holda (kompyuterda kirish uchun ulanganini ko'rsatish) va ko'rinish sozlamalari. */
+const selfUser = (user: Parameters<typeof publicUser>[0]) => ({ ...publicUser(user), phone: maskPhone(user.phone), theme: user.theme ?? null });
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Rang #rrggbb ko\'rinishida bo\'lishi kerak');
+const themeSchema = z
+  .object({
+    mode: z.enum(['auto', 'light', 'dark']),
+    bg: hexColor.optional(),
+    card: hexColor.optional(),
+    text: hexColor.optional(),
+    line: hexColor.optional(),
+    accent: hexColor.optional(),
+  })
+  .strict();
+
+// Noto'g'ri kodlarni ketma-ket tanlab ko'rishning oldini olish (to'g'ri urinishlar hisoblanmaydi)
+const joinLimiter = rateLimit({
+  windowMs: 10 * 60_000,
+  limit: 30,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: "Juda ko'p noto'g'ri urinish — 10 daqiqadan keyin qayta urinib ko'ring", code: 'RATE_LIMIT' },
+});
 
 meRouter.get(
   '/',
@@ -44,6 +68,7 @@ meRouter.patch(
         targetScore: z.number().int().min(400).max(1600).nullable().optional(),
         examDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).nullable().optional(),
         notifyDaily: z.boolean().optional(),
+        theme: themeSchema.nullable().optional(),
       }),
       req.body,
     );
@@ -54,20 +79,41 @@ meRouter.patch(
         ...(body.targetScore !== undefined ? { targetScore: body.targetScore } : {}),
         ...(body.examDate !== undefined ? { examDate: body.examDate ? new Date(body.examDate) : null } : {}),
         ...(body.notifyDaily !== undefined ? { notifyDaily: body.notifyDaily } : {}),
+        ...(body.theme !== undefined ? { theme: body.theme === null ? Prisma.DbNull : body.theme } : {}),
       },
     });
     res.json({ user: selfUser(user) });
   }),
 );
 
-/** Taklif kodi orqali guruhga qo'shilish — o'quvchi ACTIVE bo'ladi. */
+/**
+ * Guruhga qo'shilish: guruhning umumiy kodi (o'qituvchi o'chirib qo'yishi mumkin)
+ * yoki o'quvchining shaxsiy, bir martalik kodi. O'quvchi ACTIVE bo'ladi.
+ */
 meRouter.post(
   '/join',
+  joinLimiter,
   ah(async (req, res) => {
-    const { code } = parse(z.object({ code: z.string().min(4).max(16) }), req.body);
-    const group = await prisma.group.findUnique({ where: { inviteCode: code.trim().toUpperCase() } });
-    if (!group) throw new HttpError(404, "Bunday taklif kodi topilmadi", 'BAD_CODE');
+    const { code: raw } = parse(z.object({ code: z.string().min(4).max(24) }), req.body);
+    const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const u = me(req);
+    let group = await prisma.group.findUnique({ where: { inviteCode: code } });
+    if (group && !group.openJoin) {
+      throw new HttpError(403, "Bu guruhga faqat shaxsiy kod bilan qo'shiladi — o'qituvchingizdan o'zingizning kodingizni so'rang", 'PERSONAL_ONLY');
+    }
+    if (!group) {
+      const invite = await prisma.groupInvite.findUnique({ where: { code }, include: { group: true } });
+      if (!invite) throw new HttpError(404, 'Bunday taklif kodi topilmadi', 'BAD_CODE');
+      const already = await prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: invite.groupId, userId: u.id } } });
+      // Allaqachon a'zo bo'lsa, kod sarflanmaydi
+      if (!already && invite.usedById !== u.id) {
+        const usedMsg = "Bu shaxsiy kod allaqachon ishlatilgan. O'qituvchingizdan yangi kod so'rang";
+        if (invite.usedById) throw new HttpError(409, usedMsg, 'CODE_USED');
+        const claimed = await prisma.groupInvite.updateMany({ where: { id: invite.id, usedById: null }, data: { usedById: u.id, usedAt: new Date() } });
+        if (!claimed.count) throw new HttpError(409, usedMsg, 'CODE_USED');
+      }
+      group = invite.group;
+    }
     await prisma.groupMember.upsert({
       where: { groupId_userId: { groupId: group.id, userId: u.id } },
       create: { groupId: group.id, userId: u.id, role: 'STUDENT' },
