@@ -1,5 +1,5 @@
 import type { RatingType } from '@prisma/client';
-import { isProvisional, tashkentDate, titleFor } from '@sat/shared';
+import { displayRating, isProvisional, ratingFactor, tashkentDate, titleFor } from '@sat/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
@@ -63,7 +63,7 @@ leaderboardRouter.get(
         userId: r.userId,
         name: displayName(r.user),
         photoUrl: r.user.photoUrl,
-        value: Math.round(r.rating),
+        value: displayRating(type, r.rating),
         title: titleFor(r.rating, s.titles),
         provisional: isProvisional(r.games, s.rating),
       }));
@@ -85,7 +85,7 @@ leaderboardRouter.get(
           userId: x.g.userId,
           name: displayName(x.user!),
           photoUrl: x.user!.photoUrl,
-          value: Math.round(x.g._sum.delta ?? 0),
+          value: Math.round((x.g._sum.delta ?? 0) * ratingFactor(type)),
         }));
     }
     const mine = entries.find((e) => e.userId === u.id) ?? null;

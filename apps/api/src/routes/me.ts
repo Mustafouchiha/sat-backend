@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { bucketOf, tashkentDate, tashkentDayStart, TAXONOMY } from '@sat/shared';
+import { bucketOf, displayRating, ratingFactor, tashkentDate, tashkentDayStart, TAXONOMY } from '@sat/shared';
 import { prisma } from '../db';
 import { env } from '../env';
 import { me, requireAuth } from '../lib/auth';
@@ -168,17 +168,18 @@ export async function ratingHistory(userId: string, type: 'OVERALL' | 'MATH' | '
     select: { rating: true, delta: true, createdAt: true },
   });
   const byDay = new Map<string, number>();
-  for (const r of rows) byDay.set(tashkentDate(r.createdAt), Math.round(r.rating));
+  for (const r of rows) byDay.set(tashkentDate(r.createdAt), displayRating(type, r.rating));
+  const f = ratingFactor(type);
   const dayAgo = Date.now() - 86400_000;
   const weekAgo = Date.now() - 7 * 86400_000;
   const current = await prisma.rating.findUnique({ where: { userId_type: { userId, type } } });
   return {
     type,
     points: [...byDay].map(([date, rating]) => ({ date, rating })),
-    current: current ? Math.round(current.rating) : null,
-    peak: current ? Math.round(current.peak) : null,
-    dayChange: Math.round(rows.filter((r) => r.createdAt.getTime() >= dayAgo).reduce((s, r) => s + r.delta, 0)),
-    weekChange: Math.round(rows.filter((r) => r.createdAt.getTime() >= weekAgo).reduce((s, r) => s + r.delta, 0)),
+    current: current ? displayRating(type, current.rating) : null,
+    peak: current ? displayRating(type, current.peak) : null,
+    dayChange: Math.round(f * rows.filter((r) => r.createdAt.getTime() >= dayAgo).reduce((s, r) => s + r.delta, 0)),
+    weekChange: Math.round(f * rows.filter((r) => r.createdAt.getTime() >= weekAgo).reduce((s, r) => s + r.delta, 0)),
   };
 }
 

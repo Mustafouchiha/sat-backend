@@ -1,7 +1,8 @@
 import type { Rating, RatingType, User } from '@prisma/client';
 import {
+  displayEstimate,
+  displayRating,
   effectiveStreak,
-  estimateSat,
   isProvisional,
   levelFromXp,
   tashkentDate,
@@ -59,16 +60,15 @@ export async function ensureRatings(userId: string): Promise<Record<RatingType, 
   return Object.fromEntries(rows.map((r) => [r.type, r])) as Record<RatingType, Rating>;
 }
 
-export function ratingView(r: Pick<Rating, 'rating' | 'games' | 'peak'>, s: AppSettings) {
-  const rating = Math.round(r.rating);
-  const title = titleFor(rating, s.titles);
+/** O'quvchiga ko'rsatiladigan reyting: umumiy 400–1600, Math va R&W 200–800 (SAT shkalasi). */
+export function ratingView(r: Pick<Rating, 'rating' | 'games' | 'peak'>, s: AppSettings, type: RatingType = 'OVERALL') {
   return {
-    rating,
+    rating: displayRating(type, r.rating),
     games: r.games,
-    peak: Math.round(r.peak),
+    peak: displayRating(type, r.peak),
     provisional: isProvisional(r.games, s.rating),
-    title,
-    estimatedSat: estimateSat(rating, s.ratingToSat),
+    title: titleFor(r.rating, s.titles),
+    estimatedSat: displayEstimate(type, r.rating, s.ratingToSat),
   };
 }
 
@@ -83,8 +83,8 @@ export async function userStats(userId: string) {
   return {
     ratings: {
       OVERALL: ratingView(ratings.OVERALL, s),
-      MATH: ratingView(ratings.MATH, s),
-      RW: ratingView(ratings.RW, s),
+      MATH: ratingView(ratings.MATH, s, 'MATH'),
+      RW: ratingView(ratings.RW, s, 'RW'),
     },
     streak: {
       current: effectiveStreak(streak, today),

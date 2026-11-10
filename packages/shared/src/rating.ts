@@ -64,21 +64,44 @@ export function titleFor(rating: number, titles: RatingTitle[]): RatingTitle {
   return t;
 }
 
-/** Reyting -> taxminiy SAT ball (400–1600), jadval bo'yicha chiziqli interpolatsiya. */
-export function estimateSat(rating: number, table: Array<[number, number]>): number {
+/** Jadval bo'yicha chiziqli interpolatsiya (yaxlitlanmagan). */
+function interpolateSat(rating: number, table: Array<[number, number]>): number {
   const rows = [...table].sort((a, b) => a[0] - b[0]);
   if (rows.length === 0) return 400;
-  let score: number;
-  if (rating <= rows[0][0]) score = rows[0][1];
-  else if (rating >= rows[rows.length - 1][0]) score = rows[rows.length - 1][1];
-  else {
-    let i = 0;
-    while (rows[i + 1][0] < rating) i++;
-    const [r0, s0] = rows[i];
-    const [r1, s1] = rows[i + 1];
-    score = s0 + ((rating - r0) / (r1 - r0)) * (s1 - s0);
-  }
-  return clamp(Math.round(score / 10) * 10, 400, 1600);
+  if (rating <= rows[0][0]) return rows[0][1];
+  if (rating >= rows[rows.length - 1][0]) return rows[rows.length - 1][1];
+  let i = 0;
+  while (rows[i + 1][0] < rating) i++;
+  const [r0, s0] = rows[i];
+  const [r1, s1] = rows[i + 1];
+  return s0 + ((rating - r0) / (r1 - r0)) * (s1 - s0);
+}
+
+/** Reyting -> taxminiy SAT ball (400–1600), 10 ga yaxlitlangan. */
+export function estimateSat(rating: number, table: Array<[number, number]>): number {
+  return clamp(Math.round(interpolateSat(rating, table) / 10) * 10, 400, 1600);
+}
+
+export type RatingKind = 'OVERALL' | 'MATH' | 'RW';
+
+/**
+ * Reyting o'quvchiga SAT shkalasida ko'rsatiladi: umumiy 400–1600, bo'lim (Math, R&W) 200–800.
+ * Ichkarida bitta Elo shkalasi ishlaydi; bo'lim reytingi ko'rsatishda 2 ga bo'linadi.
+ */
+export function ratingFactor(type: RatingKind): number {
+  return type === 'OVERALL' ? 1 : 0.5;
+}
+
+export function displayRating(type: RatingKind, rating: number): number {
+  const [lo, hi] = type === 'OVERALL' ? [400, 1600] : [200, 800];
+  return clamp(Math.round(rating * ratingFactor(type)), lo, hi);
+}
+
+/** Taxminiy ball: umumiy 400–1600, bo'lim 200–800 (10 ga yaxlitlangan). */
+export function displayEstimate(type: RatingKind, rating: number, table: Array<[number, number]>): number {
+  if (type === 'OVERALL') return estimateSat(rating, table);
+  // Bo'lim: yaxlitlanmagan umumiy bahoning yarmi, keyin 10 ga (ikki marta yaxlitlash xatosisiz)
+  return clamp(Math.round(interpolateSat(rating, table) / 20) * 10, 200, 800);
 }
 
 export type DifficultyLabel = 'EASY' | 'MEDIUM' | 'HARD';

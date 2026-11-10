@@ -6,6 +6,8 @@ import {
   bucketOf,
   DEFAULT_SETTINGS,
   deepMerge,
+  displayEstimate,
+  displayRating,
   distributeByWeight,
   earnedAchievements,
   effectiveDifficulty,
@@ -80,13 +82,27 @@ describe('Elo reyting', () => {
     expect(on.userDelta).toBeGreaterThan(off.userDelta);
   });
 
-  it('unvon va taxminiy SAT ball', () => {
-    expect(titleFor(950, S.titles).name).toBe('Beginner');
-    expect(titleFor(1200, S.titles).name).toBe('Intermediate');
-    expect(titleFor(1720, S.titles).name).toBe('Master');
-    expect(estimateSat(1200, S.ratingToSat)).toBe(1000);
-    expect(estimateSat(1250, S.ratingToSat)).toBe(1050);
+  it('unvon va taxminiy SAT ball (SAT shkalasi)', () => {
+    expect(titleFor(850, S.titles).name).toBe('Beginner');
+    expect(titleFor(1000, S.titles).name).toBe('Intermediate');
+    expect(titleFor(1500, S.titles).name).toBe('Master');
+    expect(Math.max(...S.titles.map((t) => t.min))).toBeLessThanOrEqual(1600);
+    expect(estimateSat(1203, S.ratingToSat)).toBe(1200);
+    expect(estimateSat(1256, S.ratingToSat)).toBe(1260);
     expect(estimateSat(5000, S.ratingToSat)).toBe(1600);
+  });
+
+  it("reyting 400–1600 dan chiqmaydi, bo'lim 200–800 ko'rinishida", () => {
+    const top = eloUpdate({ userRating: 1600, userGames: 50, questionRating: 1450, questionGames: 100, correct: true }, S.rating);
+    expect(top.userRating).toBe(1600);
+    const low = eloUpdate({ userRating: 400, userGames: 50, questionRating: 1000, questionGames: 100, correct: false }, S.rating);
+    expect(low.userRating).toBe(400);
+    expect(displayRating('OVERALL', 1700)).toBe(1600);
+    expect(displayRating('MATH', 1213)).toBe(607);
+    expect(displayRating('RW', 300)).toBe(200);
+    expect(displayEstimate('OVERALL', 1213, S.ratingToSat)).toBe(1210);
+    expect(displayEstimate('MATH', 1213, S.ratingToSat)).toBe(610);
+    expect(displayEstimate('RW', 1026, S.ratingToSat)).toBe(510); // 513 -> 510, ikki marta yaxlitlanmaydi
   });
 
   it('amaldagi qiyinlik: statistika yetarli bo‘lsa reyting bo‘yicha', () => {

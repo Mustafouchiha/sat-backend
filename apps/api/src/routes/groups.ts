@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { Prisma } from '@prisma/client';
-import { effectiveStreak, tashkentDate, TAXONOMY } from '@sat/shared';
+import { DEFAULT_SETTINGS, displayRating, effectiveStreak, tashkentDate, TAXONOMY } from '@sat/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
@@ -138,7 +138,9 @@ async function groupStudents(groupId: string) {
   ]);
   const today = tashkentDate();
   return members.map((m) => {
-    const r = (t: string) => Math.round(m.user.ratings.find((x) => x.type === t)?.rating ?? 1200);
+    // SAT shkalasi: umumiy 400–1600, Math va R&W 200–800
+    const r = (t: 'OVERALL' | 'MATH' | 'RW') =>
+      displayRating(t, m.user.ratings.find((x) => x.type === t)?.rating ?? DEFAULT_SETTINGS.rating.initial);
     return {
       id: m.user.id,
       name: displayName(m.user),
