@@ -120,12 +120,46 @@ async function seedGroup(ids: Record<string, string>) {
   return group;
 }
 
+/** Kalitlar tartibidan qat'i nazar solishtirish (Postgres jsonb kalitlarni qayta tartiblaydi). */
+function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .filter((k) => o[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+
 async function seedTemplates(operatorId: string | null) {
   let created = 0;
+  let updated = 0;
   for (const t of [...MATH_TEMPLATES, ...RW_TEMPLATES]) {
-    const exists = await prisma.questionTemplate.findFirst({ where: { title: t.title } });
-    if (exists) continue;
     const spec = parseSpec(t.spec);
+    const exists = await prisma.questionTemplate.findFirst({ where: { title: t.title } });
+    if (exists) {
+      // Seed shabloni o'zgargan bo'lsa (masalan, rasm qo'shilgan) yangi versiya sifatida yangilanadi —
+      // faqat uni hech kim qo'lda tahrirlamagan bo'lsa (updatedById seed bilan bir xil).
+      const untouched = exists.tags.includes('seed') && exists.updatedById === operatorId;
+      if (untouched && stableJson(exists.spec) !== stableJson(spec)) {
+        const report = runChecks(spec, 200);
+        if (!report.ok) throw new Error(`Seed shablon tekshiruvdan o'tmadi: ${t.title}\n${report.errors.join('\n')}`);
+        const version = exists.version + 1;
+        await prisma.questionTemplate.update({
+          where: { id: exists.id },
+          data: {
+            spec: spec as unknown as Prisma.InputJsonValue,
+            version,
+            revisions: { create: { version, spec: spec as unknown as Prisma.InputJsonValue, createdById: operatorId } },
+          },
+        });
+        updated++;
+      }
+      continue;
+    }
     const report = runChecks(spec, 200);
     if (!report.ok) throw new Error(`Seed shablon tekshiruvdan o'tmadi: ${t.title}\n${report.errors.join('\n')}`);
     await prisma.questionTemplate.create({
@@ -146,7 +180,7 @@ async function seedTemplates(operatorId: string | null) {
     });
     created++;
   }
-  console.log(`✓ Shablonlar: ${created} ta yangi (jami ${MATH_TEMPLATES.length + RW_TEMPLATES.length})`);
+  console.log(`✓ Shablonlar: ${created} ta yangi, ${updated} ta yangilangan (jami ${MATH_TEMPLATES.length + RW_TEMPLATES.length})`);
 }
 
 async function seedTests(operatorId: string | null) {

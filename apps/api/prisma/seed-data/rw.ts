@@ -1,3 +1,5 @@
+import { barChart } from './figures';
+import { RW_MORE_TEMPLATES } from './rw-more';
 import type { SeedTemplate } from './types';
 
 const COMPLETE = 'Which choice completes the text with the most logical and precise word or phrase?';
@@ -114,8 +116,18 @@ export const RW_TEMPLATES: SeedTemplate[] = [
     difficulty: 'MEDIUM',
     spec: {
       passage:
-        'A student surveyed members of a public library about their reading habits. In the survey, {a}% of members under age 18 reported reading more than three books per month, compared with {b}% of members aged 18 to 40 and {c}% of members over age 40. The student claims that, among the library\'s members, the youngest group is the most likely to read more than three books per month.',
-      stem: "Which choice best describes data from the survey that support the student's claim?",
+        'A student surveyed members of a public library about their reading habits. The graph shows the percentage of members in each age group who reported reading more than three books per month. The student claims that, among the library\'s members, the youngest group is the most likely to read more than three books per month.',
+      stem: "Which choice best describes data from the graph that support the student's claim?",
+      svg: barChart({
+        cats: ['Under 18', '18 to 40', 'Over 40'],
+        values: ['a', 'b', 'c'],
+        max: 80,
+        step: 10,
+        labelStep: 20,
+        title: 'Members reading 3+ books a month (%)',
+        valueLabels: true,
+        unit: '%',
+      }),
       variables: [
         { name: 'a', type: 'int', min: 52, max: 75 },
         { name: 'b', type: 'int', min: 30, max: 50 },
@@ -232,4 +244,6 @@ export const RW_TEMPLATES: SeedTemplate[] = [
       explanation: 'Only the first choice mentions the achievement: winning first place at the national competition.',
     },
   },
+
+  ...RW_MORE_TEMPLATES,
 ];

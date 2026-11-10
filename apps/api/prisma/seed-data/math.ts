@@ -1,4 +1,46 @@
+import { DASH, END, MID, seg, svg, txt } from './figures';
+import { MATH_FIGURE_TEMPLATES } from './math-figures';
 import type { SeedTemplate } from './types';
+
+/** Nuqtali grafik: soatlar 0–16, ball 0–100, nuqtalar va eng yaxshi moslik chizig'i y = m·x + b. */
+const SCATTER_OFFSETS = [5, -4, 6, -3, 4, -6, 3, -2];
+const SCATTER = svg(
+  300,
+  232,
+  [0, 4, 8, 12, 16]
+    .map((h) => seg(50 + 15 * h, 30, 50 + 15 * h, 190, 'stroke-opacity="0.15"') + txt(50 + 15 * h, 205, String(h), MID, 11))
+    .join('') +
+    [0, 20, 40, 60, 80, 100]
+      .map((s) => seg(50, 190 - 1.6 * s, 290, 190 - 1.6 * s, 'stroke-opacity="0.15"') + txt(44, 194 - 1.6 * s, String(s), END, 11))
+      .join('') +
+    seg(50, 190, 290, 190, 'stroke-width="1.5"') +
+    seg(50, 30, 50, 190, 'stroke-width="1.5"') +
+    SCATTER_OFFSETS.map(
+      (e, i) =>
+        `<circle cx="{=50 + 15*(${i + 1}*k/9)|int}" cy="{=190 - 1.6*min(100, max(0, m*${i + 1}*k/9 + b + (${e})))|int}" r="3.5" fill="currentColor"/>`,
+    ).join('') +
+    seg(50, '{=190 - 1.6*b|int}', '{=50 + 15*min(16, (100 - b)/m)|int}', '{=190 - 1.6*(m*min(16, (100 - b)/m) + b)|int}') +
+    txt(170, 226, 'Hours studied', MID, 12) +
+    txt(8, 18, 'Quiz score', '', 12),
+);
+
+/** To'g'ri burchakli parallelepiped (qiya proyeksiya), ko'rinmas qirralar punktir. */
+const BOX = svg(
+  260,
+  200,
+  `<rect x="40" y="70" width="150" height="100" fill="none" stroke="currentColor" stroke-width="2"/>` +
+    seg(40, 70, 80, 40) +
+    seg(190, 70, 230, 40) +
+    seg(80, 40, 230, 40) +
+    seg(190, 170, 230, 140) +
+    seg(230, 40, 230, 140) +
+    seg(80, 140, 230, 140, DASH) +
+    seg(80, 40, 80, 140, DASH) +
+    seg(80, 140, 40, 170, DASH) +
+    txt(115, 190, '{l} cm', MID, 12) +
+    txt(34, 124, '{h} cm', END, 12) +
+    txt(214, 168, '{w} cm', '', 12),
+);
 
 /**
  * Markaz o'zi tuzgan namunaviy Math shablonlari (rasmiy College Board savollari EMAS).
@@ -414,7 +456,8 @@ export const MATH_TEMPLATES: SeedTemplate[] = [
     difficulty: 'MEDIUM',
     spec: {
       stem:
-        'A scatterplot shows the relationship between the number of hours, $x$, that students studied and their scores, $y$, on a quiz. The line of best fit is $y = {m}x + {b}$. Based on the line of best fit, what is the predicted score for a student who studied {k} hours?',
+        'The scatterplot shows the relationship between the number of hours, $x$, that students studied and their scores, $y$, on a quiz. The line of best fit, shown, has the equation $y = {m}x + {b}$. Based on the line of best fit, what is the predicted score for a student who studied {k} hours?',
+      svg: SCATTER,
       variables: [
         { name: 'm', type: 'decimal', min: 1.5, max: 6.5, places: 1 },
         { name: 'b', type: 'int', min: 10, max: 60 },
@@ -463,7 +506,8 @@ export const MATH_TEMPLATES: SeedTemplate[] = [
     difficulty: 'EASY',
     spec: {
       stem:
-        'A rectangular box has a length of {l} centimeters, a width of {w} centimeters, and a height of {h} centimeters. What is the volume, in cubic centimeters, of the box?',
+        'The rectangular box shown has a length of {l} centimeters, a width of {w} centimeters, and a height of {h} centimeters. What is the volume, in cubic centimeters, of the box?',
+      svg: BOX,
       variables: [
         { name: 'l', type: 'int', min: 3, max: 12 },
         { name: 'w', type: 'int', min: 2, max: 10 },
@@ -572,4 +616,7 @@ export const MATH_TEMPLATES: SeedTemplate[] = [
         'Angles 1 and 2 are same-side interior angles formed by parallel lines and a transversal, so they are supplementary: $180 - {x} = {answer}$.',
     },
   },
+
+  // Rasmli shablonlar: geometriya chizmalari, grafiklar, diagramma va jadvallar
+  ...MATH_FIGURE_TEMPLATES,
 ];
