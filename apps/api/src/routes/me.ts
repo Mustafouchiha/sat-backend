@@ -7,7 +7,7 @@ import { prisma } from '../db';
 import { env } from '../env';
 import { me, requireAuth } from '../lib/auth';
 import { ah, HttpError, notFound, parse, randomCode } from '../lib/http';
-import { getBotUsername } from '../lib/notify';
+import { getBotTitle, getBotUsername } from '../lib/notify';
 import { getSettings } from '../lib/settings';
 import { publicUser, userStats } from '../lib/users';
 import { getVariant, reviewQuestion } from '../lib/variants';
@@ -54,7 +54,7 @@ meRouter.get(
       user: selfUser(user),
       stats,
       groups: groups.map((g) => ({ id: g.group.id, name: g.group.name, role: g.role })),
-      config: { botUsername: getBotUsername(), desmosKey: env.DESMOS_API_KEY ?? null },
+      config: { botUsername: getBotUsername(), botTitle: getBotTitle(), desmosKey: env.DESMOS_API_KEY ?? null },
     });
   }),
 );

@@ -2,8 +2,9 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../env';
+import { me, requireAuth } from '../lib/auth';
 import { ah, HttpError, parse } from '../lib/http';
-import { approveQrLogin, createQrLogin, pollLogin, requestPhoneCode, verifyPhoneCode } from '../lib/webLogin';
+import { approveQrLogin, createQrLogin, peekQrLogin, pollLogin, requestPhoneCode, verifyPhoneCode } from '../lib/webLogin';
 import { upsertTgUser } from './auth';
 
 /** Kompyuterdagi brauzer uchun kirish: QR kod (telefonda tasdiqlash) yoki telefon raqam + Telegram'ga kelgan kod. */
@@ -48,6 +49,31 @@ webLoginRouter.post(
   ah(async (req, res) => {
     const b = parse(z.object({ id: idE, secret: secretE, code: z.string().regex(/^\s*\d{6}\s*$/, '6 xonali kod kiriting') }), req.body);
     res.json(await verifyPhoneCode(b.id, b.secret, b.code));
+  }),
+);
+
+/**
+ * Mini App ichidagi QR skaner: kirgan foydalanuvchi kompyuterdagi QR'ni skanerlaydi,
+ * avval qurilmani ko'radi (peek), so'ng tasdiqlaydi (approve) — bot chatiga o'tish shart emas.
+ */
+webLoginRouter.post(
+  '/peek',
+  requireAuth,
+  ah(async (req, res) => {
+    const b = parse(z.object({ id: idE }), req.body);
+    res.json(await peekQrLogin(b.id));
+  }),
+);
+
+webLoginRouter.post(
+  '/approve',
+  requireAuth,
+  ah(async (req, res) => {
+    const b = parse(z.object({ id: idE }), req.body);
+    const result = await approveQrLogin(b.id, me(req));
+    if (result === 'gone') throw new HttpError(410, 'QR kod eskirgan yoki ishlatilgan — kompyuterdagi sahifani yangilab, qayta skanerlang', 'WL_EXPIRED');
+    if (result === 'blocked') throw new HttpError(403, 'Hisobingiz bloklangan', 'BLOCKED');
+    res.json({ ok: true });
   }),
 );
 

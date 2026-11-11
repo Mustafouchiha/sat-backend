@@ -5,7 +5,7 @@ import { message } from 'telegraf/filters';
 import { prisma } from './db';
 import { env } from './env';
 import { hasRole } from './lib/auth';
-import { appUrl, escapeHtml, setBotUsername } from './lib/notify';
+import { appUrl, escapeHtml, setBotTitle, setBotUsername } from './lib/notify';
 import { displayName } from './lib/users';
 import { approveQrLogin, findPendingQr, linkPhone, maskPhone, rejectQrLogin, sendPendingPhoneCode } from './lib/webLogin';
 import { upsertTgUser } from './routes/auth';
@@ -194,7 +194,9 @@ export async function attachWebhook(bot: Telegraf, app: Express): Promise<boolea
 
 export async function finishBotSetup(bot: Telegraf, webhook: boolean): Promise<void> {
   try {
-    setBotUsername((await bot.telegram.getMe()).username);
+    const meInfo = await bot.telegram.getMe();
+    setBotUsername(meInfo.username);
+    setBotTitle(meInfo.first_name);
     await bot.telegram.setMyCommands([
       { command: 'start', description: 'Boshlash' },
       { command: 'app', description: 'Ilovani ochish' },

@@ -4,7 +4,7 @@ import { prisma } from '../db';
 import { env } from '../env';
 import { signToken } from './auth';
 import { HttpError } from './http';
-import { escapeHtml, getBot, getBotUsername } from './notify';
+import { escapeHtml, getBot, getBotTitle, getBotUsername } from './notify';
 import { deviceLabel, maskPhone, normalizePhone } from './loginHelpers';
 import { publicUser } from './users';
 
@@ -74,7 +74,7 @@ export async function createQrLogin(userAgent?: string) {
   const secret = randomSecret();
   const expiresAt = new Date(Date.now() + QR_TTL_MS);
   await prisma.webLogin.create({ data: { id, secretHash: sha256(secret), kind: 'QR', device: deviceLabel(userAgent), expiresAt } });
-  return { id, secret, expiresAt, link: botStartLink(`login_${id}`) };
+  return { id, secret, expiresAt, link: botStartLink(`login_${id}`), botTitle: getBotTitle() };
 }
 
 export type PollResult =
@@ -95,6 +95,13 @@ export async function pollLogin(id: string, secret: string): Promise<PollResult>
   }
   if (wl.expiresAt.getTime() < Date.now()) return { status: 'expired' };
   return { status: 'pending' };
+}
+
+/** Mini App ichidagi skaner: tasdiqlashdan oldin qaysi qurilma kirayotganini ko'rsatish. */
+export async function peekQrLogin(id: string) {
+  const wl = await findPendingQr(id);
+  if (!wl) throw new HttpError(410, "QR kod eskirgan yoki ishlatilgan — kompyuterdagi sahifani yangilab, qayta skanerlang", 'WL_EXPIRED');
+  return { id: wl.id, device: wl.device, expiresAt: wl.expiresAt };
 }
 
 /** Bot «/start login_ID» olganda: tasdiqlash xabari uchun so'rov ma'lumoti. */
@@ -167,7 +174,8 @@ export async function requestPhoneCode(rawPhone: string, userAgent?: string) {
   const user = await prisma.user.findUnique({ where: { phone } });
   // botBlocked eskirgan bo'lishi mumkin (botni qayta ochgan bo'lsa) — baribir urinamiz, xato bo'lsa jim o'tadi
   if (user && user.status !== 'BLOCKED') await sendCode(wl, user);
-  return { id, secret, expiresAt, phone: maskPhone(phone), linkBot: botStartLink('phone') };
+  const bot = getBotUsername();
+  return { id, secret, expiresAt, phone: maskPhone(phone), linkBot: botStartLink('phone'), chatLink: bot ? `https://t.me/${bot}` : null, botTitle: getBotTitle() };
 }
 
 export async function verifyPhoneCode(id: string, secret: string, code: string) {

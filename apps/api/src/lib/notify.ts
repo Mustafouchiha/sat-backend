@@ -13,6 +13,8 @@ export function getBot(): Telegraf | null {
   return botRef;
 }
 
+let botTitleRef: string | null = null;
+
 /** Bot ishga tushganda getMe() dan olinadi; bo'lmasa BOT_USERNAME. */
 export function setBotUsername(username: string | null | undefined): void {
   botUsernameRef = username ?? null;
@@ -20,6 +22,15 @@ export function setBotUsername(username: string | null | undefined): void {
 
 export function getBotUsername(): string | null {
   return botUsernameRef ?? env.BOT_USERNAME ?? null;
+}
+
+/** Botning chatlar ro'yxatidagi nomi (masalan «SATiy») — foydalanuvchi chatni shu nom bilan qidiradi. */
+export function setBotTitle(title: string | null | undefined): void {
+  botTitleRef = title ?? null;
+}
+
+export function getBotTitle(): string | null {
+  return botTitleRef;
 }
 
 export function appUrl(params?: Record<string, string>): string {
