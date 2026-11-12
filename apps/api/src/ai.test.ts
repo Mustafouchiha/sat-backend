@@ -7,7 +7,8 @@ beforeAll(async () => {
   process.env.DATABASE_URL ??= 'postgresql://test@localhost:5432/test';
   process.env.JWT_SECRET ??= 'test-secret-0123456789';
   ai = await import('./lib/ai');
-});
+  // SDK yuklanishi band kompyuterda (boshqa test fayllari parallel) 10 soniyadan oshishi mumkin
+}, 60_000);
 
 const LINEAR = parseSpec({
   stem: 'If ${a}x + {b} = {c}$, what is $x$?',
