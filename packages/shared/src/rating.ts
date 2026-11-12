@@ -50,7 +50,10 @@ export function eloUpdate(inp: EloInput, cfg: RatingConfig): EloResult {
   if (!inp.correct && userDelta > -1) userDelta = -1;
   const userRating = clamp(inp.userRating + userDelta, cfg.min, cfg.max);
 
-  const qk = inp.questionGames < cfg.questionProvisionalGames ? cfg.questionKProvisional : cfg.questionK;
+  // Yangi o'quvchi pastdan (800 dan) boshlaydi va hali o'z darajasiga yetmagan — uning javoblari
+  // savol qiyinligini yarim kuch bilan o'zgartiradi, aks holda savollar reytingi asossiz pasayib ketadi
+  const qkBase = inp.questionGames < cfg.questionProvisionalGames ? cfg.questionKProvisional : cfg.questionK;
+  const qk = isProvisional(inp.userGames, cfg) ? qkBase / 2 : qkBase;
   const questionDelta = qk * ((1 - s) - (1 - expected));
   const questionRating = clamp(inp.questionRating + questionDelta, cfg.min, cfg.max);
 

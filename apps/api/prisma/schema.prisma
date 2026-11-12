@@ -540,9 +540,10 @@ model ReviewItem {
 model Rating {
   userId    String
   type      RatingType
-  rating    Float      @default(1200)
+  /// Ichki shkala 400–1600; yangi o'quvchi 800 (Math va R&W bo'limlari 400 ko'rinishida)
+  rating    Float      @default(800)
   games     Int        @default(0)
-  peak      Float      @default(1200)
+  peak      Float      @default(800)
   updatedAt DateTime   @updatedAt
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 

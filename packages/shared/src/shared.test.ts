@@ -104,6 +104,25 @@ describe('Elo reyting', () => {
     expect(displayRating('RW', 300)).toBe(200);
   });
 
+  it("yangi o'quvchi: Math 400, R&W 400 (jami 800) dan boshlaydi; har bo'lim 200–800", () => {
+    const start = S.rating.initial;
+    expect(displayRating('MATH', start, S.ratingToSat)).toBe(400);
+    expect(displayRating('RW', start, S.ratingToSat)).toBe(400);
+    expect(displayRating('OVERALL', start, S.ratingToSat)).toBe(800);
+    expect(estimatedTotal(start, start, S.ratingToSat)).toBe(800);
+    expect(displayRating('MATH', S.rating.min, S.ratingToSat)).toBe(200);
+    expect(displayRating('RW', S.rating.max, S.ratingToSat)).toBe(800);
+    expect(titleFor(start, S.titles).name).toBe('Beginner');
+  });
+
+  it("yangi (provisional) o'quvchi savol qiyinligini yarim kuch bilan o'zgartiradi", () => {
+    const fresh = eloUpdate({ userRating: 800, userGames: 0, questionRating: 1000, questionGames: 100, correct: true }, S.rating);
+    const stable = eloUpdate({ userRating: 800, userGames: 100, questionRating: 1000, questionGames: 100, correct: true }, S.rating);
+    expect(fresh.questionDelta).toBeLessThan(0);
+    expect(fresh.questionDelta).toBeCloseTo(stable.questionDelta / 2);
+    expect(fresh.userDelta).toBeGreaterThan(stable.userDelta); // o'quvchining o'zi esa tezroq ko'tariladi
+  });
+
   it('taxminiy SAT = Math + R&W, ballar doim 0 bilan tugaydi', () => {
     // Math 758.5 -> 760, R&W 619 -> 620, jami 1380
     expect(estimatedTotal(1517, 1238, S.ratingToSat)).toBe(1380);

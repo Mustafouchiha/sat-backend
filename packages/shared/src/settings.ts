@@ -60,8 +60,9 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   // Reyting SAT shkalasida: umumiy 400–1600 (Math va R&W ko'rsatishda 200–800).
+  // Yangi o'quvchi 800 dan boshlaydi: har bir bo'limda 400 (eng past 200, eng yuqori 800).
   rating: {
-    initial: 1000,
+    initial: 800,
     kProvisional: 40,
     kStable: 20,
     provisionalGames: 20,
