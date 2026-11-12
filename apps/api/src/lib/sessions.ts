@@ -1,5 +1,5 @@
 import type { AttemptMode, Prisma, Section } from '@prisma/client';
-import { applyDailyCompletion, tashkentDate } from '@sat/shared';
+import { applyDailyCompletion, displayRating, tashkentDate } from '@sat/shared';
 import { prisma } from '../db';
 import type { AuthUser } from './auth';
 import { filterCatalog, getCatalog, type CatalogItem } from './catalog';
@@ -146,7 +146,7 @@ export async function answerSession(
       correctDisplay: v.correctDisplay,
       explanation: v.explanation,
       ratingDelta: row.ratingDelta ?? 0,
-      rating: Math.round(ratings.OVERALL.rating),
+      rating: displayRating('OVERALL', ratings.OVERALL.rating),
       finished: fresh.status === 'FINISHED',
       lives: livesLeft(fresh),
       achievements: [],
@@ -163,7 +163,7 @@ export async function answerSession(
       correctLabel: v.correctLabel,
       explanation: v.explanation,
       ratingDelta: 0,
-      rating: Math.round(ratings.OVERALL.rating),
+      rating: displayRating('OVERALL', ratings.OVERALL.rating),
       finished: true,
       lives: livesLeft(attempt),
       achievements: [],

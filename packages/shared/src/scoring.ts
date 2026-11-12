@@ -25,11 +25,12 @@ export function fallbackScaled(raw: number, maxRaw: number, variant: ModuleVaria
 export function scaleScore(raw: number, rows: ScaleRow[], maxRaw: number, variant: ModuleVariantName): number {
   if (!rows.length) return fallbackScaled(raw, maxRaw, variant);
   const sorted = [...rows].sort((a, b) => a.raw - b.raw);
+  // Admin jadvalga 613 kabi qiymat yozgan bo'lsa ham ball 10 ga karrali chiqadi
   const exact = sorted.find((r) => r.raw === raw);
-  if (exact) return clamp(exact.scaled, 200, 800);
-  if (raw <= sorted[0].raw) return clamp(sorted[0].scaled, 200, 800);
+  if (exact) return clamp(round10(exact.scaled), 200, 800);
+  if (raw <= sorted[0].raw) return clamp(round10(sorted[0].scaled), 200, 800);
   const last = sorted[sorted.length - 1];
-  if (raw >= last.raw) return clamp(last.scaled, 200, 800);
+  if (raw >= last.raw) return clamp(round10(last.scaled), 200, 800);
   let i = 0;
   while (sorted[i + 1].raw < raw) i++;
   const a = sorted[i];

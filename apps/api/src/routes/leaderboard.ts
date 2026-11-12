@@ -1,5 +1,5 @@
 import type { RatingType } from '@prisma/client';
-import { displayRating, isProvisional, ratingFactor, tashkentDate, titleFor } from '@sat/shared';
+import { displayChange, displayRating, isProvisional, tashkentDate, titleFor } from '@sat/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
@@ -85,7 +85,7 @@ leaderboardRouter.get(
           userId: x.g.userId,
           name: displayName(x.user!),
           photoUrl: x.user!.photoUrl,
-          value: Math.round((x.g._sum.delta ?? 0) * ratingFactor(type)),
+          value: displayChange(type, x.g._sum.delta ?? 0),
         }));
     }
     const mine = entries.find((e) => e.userId === u.id) ?? null;

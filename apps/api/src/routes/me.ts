@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { bucketOf, displayRating, ratingFactor, tashkentDate, tashkentDayStart, TAXONOMY } from '@sat/shared';
+import { bucketOf, displayChange, displayRating, tashkentDate, tashkentDayStart, TAXONOMY } from '@sat/shared';
 import { prisma } from '../db';
 import { env } from '../env';
 import { me, requireAuth } from '../lib/auth';
@@ -192,7 +192,7 @@ meRouter.get(
         };
       }),
       lastTest,
-      weeklyDelta: Math.round(weekly._sum.delta ?? 0),
+      weeklyDelta: displayChange('OVERALL', weekly._sum.delta ?? 0),
       daysToExam,
     });
   }),
@@ -221,7 +221,6 @@ export async function ratingHistory(userId: string, type: 'OVERALL' | 'MATH' | '
   const byDay = new Map<string, number>();
   const s = await getSettings();
   for (const r of rows) byDay.set(tashkentDate(r.createdAt), displayRating(type, r.rating, s.ratingToSat));
-  const f = ratingFactor(type);
   const dayAgo = Date.now() - 86400_000;
   const weekAgo = Date.now() - 7 * 86400_000;
   const current = await prisma.rating.findUnique({ where: { userId_type: { userId, type } } });
@@ -230,8 +229,8 @@ export async function ratingHistory(userId: string, type: 'OVERALL' | 'MATH' | '
     points: [...byDay].map(([date, rating]) => ({ date, rating })),
     current: current ? displayRating(type, current.rating, s.ratingToSat) : null,
     peak: current ? displayRating(type, current.peak, s.ratingToSat) : null,
-    dayChange: Math.round(f * rows.filter((r) => r.createdAt.getTime() >= dayAgo).reduce((s, r) => s + r.delta, 0)),
-    weekChange: Math.round(f * rows.filter((r) => r.createdAt.getTime() >= weekAgo).reduce((s, r) => s + r.delta, 0)),
+    dayChange: displayChange(type, rows.filter((r) => r.createdAt.getTime() >= dayAgo).reduce((s, r) => s + r.delta, 0)),
+    weekChange: displayChange(type, rows.filter((r) => r.createdAt.getTime() >= weekAgo).reduce((s, r) => s + r.delta, 0)),
   };
 }
 

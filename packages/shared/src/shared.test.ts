@@ -6,6 +6,7 @@ import {
   bucketOf,
   DEFAULT_SETTINGS,
   deepMerge,
+  displayChange,
   displayRating,
   distributeByWeight,
   earnedAchievements,
@@ -17,6 +18,7 @@ import {
   expectedScore,
   levelFromXp,
   pickForMe,
+  round10,
   routeSecondModule,
   scaleScore,
   srsNext,
@@ -98,10 +100,39 @@ describe('Elo reyting', () => {
     const low = eloUpdate({ userRating: 400, userGames: 50, questionRating: 1000, questionGames: 100, correct: false }, S.rating);
     expect(low.userRating).toBe(400);
     expect(displayRating('OVERALL', 1700)).toBe(1600);
-    expect(displayRating('OVERALL', 963)).toBe(963); // umumiy reyting aniq son
+    expect(displayRating('OVERALL', 963)).toBe(960); // umumiy reyting ham 10 ga karrali
     expect(displayRating('MATH', 1213, S.ratingToSat)).toBe(610); // 606.5 -> 610
     expect(displayRating('RW', 1026, S.ratingToSat)).toBe(510); // 513 -> 510, ikki marta yaxlitlanmaydi
     expect(displayRating('RW', 300)).toBe(200);
+  });
+
+  it('barcha ballar 10 ga yaxlitlanadi: 1213 → 1210, 898 → 900', () => {
+    expect(round10(1213)).toBe(1210);
+    expect(round10(898)).toBe(900);
+    expect(round10(1215)).toBe(1220);
+    expect(round10(-4)).toBe(0);
+    expect(Object.is(round10(-4), -0)).toBe(false);
+    expect(displayRating('OVERALL', 1213)).toBe(1210);
+    expect(displayRating('OVERALL', 898)).toBe(900);
+    expect(displayRating('OVERALL', 401)).toBe(400);
+    // Kun/hafta o'zgarishi ham 10 ga: umumiy −237 → −240, bo'limda ichki +37 → +18.5 → +20
+    expect(displayChange('OVERALL', -237)).toBe(-240);
+    expect(displayChange('MATH', 37)).toBe(20);
+    for (let r = 400; r <= 1600; r += 7) {
+      for (const t of ['OVERALL', 'MATH', 'RW'] as const) expect(displayRating(t, r) % 10).toBe(0);
+    }
+  });
+
+  it('test bali: admin jadvaliga 613 yozilgan bo‘lsa ham 610 chiqadi', () => {
+    const rows = [
+      { raw: 0, scaled: 203 },
+      { raw: 10, scaled: 613 },
+      { raw: 20, scaled: 798 },
+    ];
+    expect(scaleScore(10, rows, 20, 'STANDARD')).toBe(610);
+    expect(scaleScore(0, rows, 20, 'STANDARD')).toBe(200);
+    expect(scaleScore(20, rows, 20, 'STANDARD')).toBe(800);
+    expect(scaleScore(15, rows, 20, 'STANDARD') % 10).toBe(0);
   });
 
   it("yangi o'quvchi: Math 400, R&W 400 (jami 800) dan boshlaydi; har bo'lim 200–800", () => {

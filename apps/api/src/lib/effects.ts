@@ -1,6 +1,7 @@
 import type { RatingType } from '@prisma/client';
 import {
   ACHIEVEMENTS,
+  displayRating,
   earnedAchievements,
   eloUpdate,
   srsNext,
@@ -46,7 +47,7 @@ export async function applyEffects(
 ): Promise<EffectsResult> {
   const ratingRows = await ensureRatings(userId);
   if (!items.length) {
-    return { perItem: [], overallDelta: 0, overallRating: Math.round(ratingRows.OVERALL.rating), xp: 0, achievements: [] };
+    return { perItem: [], overallDelta: 0, overallRating: displayRating('OVERALL', ratingRows.OVERALL.rating), xp: 0, achievements: [] };
   }
   const s = await getSettings();
   const ids = [...new Set(items.map((i) => i.templateId))];
@@ -196,7 +197,7 @@ export async function applyEffects(
   await prisma.$transaction(ops);
 
   const achievements = await checkAchievements(userId);
-  return { perItem, overallDelta, overallRating: Math.round(ratings.OVERALL.rating), xp, achievements };
+  return { perItem, overallDelta, overallRating: displayRating('OVERALL', ratings.OVERALL.rating), xp, achievements };
 }
 
 export async function addXp(userId: string, amount: number): Promise<void> {

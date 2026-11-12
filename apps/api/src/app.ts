@@ -45,7 +45,8 @@ export function buildApp(app: Express): Express {
   app.get('/api/health', async (_req, res) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
-      res.json({ ok: true, db: true, time: new Date().toISOString() });
+      // commit — Railway avtomatik beradi; deploy haqiqatan yangilanganini tekshirish uchun
+      res.json({ ok: true, db: true, time: new Date().toISOString(), commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null });
     } catch {
       res.status(503).json({ ok: false, db: false });
     }

@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { tashkentDate } from '@sat/shared';
+import { displayChange, displayRating, tashkentDate } from '@sat/shared';
 import { dailyStatsText } from './bot';
 import { prisma } from './db';
 import type { AuthUser } from './lib/auth';
@@ -92,12 +92,12 @@ async function parentWeekly() {
       prisma.attempt.count({ where: { userId: sid, mode: 'DAILY', status: 'FINISHED', startedAt: { gte: since } } }),
       prisma.attempt.findFirst({ where: { userId: sid, mode: 'TEST', status: 'FINISHED', totalScaled: { not: null } }, orderBy: { finishedAt: 'desc' } }),
     ]);
-    const d = Math.round(delta._sum.delta ?? 0);
+    const d = displayChange('OVERALL', delta._sum.delta ?? 0);
     const text =
       `👨‍👩‍👧 <b>Haftalik hisobot: ${escapeHtml(displayName(l.student))}</b>\n\n` +
       `✍️ Yechilgan savollar: ${answered} (to'g'ri: ${answered ? Math.round((correct / answered) * 100) : 0}%)\n` +
       `📅 Kunlik testlar: ${dailyDone}/7\n` +
-      `📈 Reyting: ${rating ? Math.round(rating.rating) : '—'} (${d >= 0 ? '+' : ''}${d} hafta davomida)\n` +
+      `📈 Reyting: ${rating ? displayRating('OVERALL', rating.rating) : '—'} (${d >= 0 ? '+' : ''}${d} hafta davomida)\n` +
       (lastTest ? `🎓 Oxirgi mock test: ${lastTest.totalScaled}\n` : '');
     await notifyUser(l.parent, text, undefined, 'PARENT_WEEKLY');
     await new Promise((r) => setTimeout(r, 40));

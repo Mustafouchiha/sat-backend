@@ -87,13 +87,24 @@ export function estimateSat(rating: number, table: Array<[number, number]>): num
 
 export type RatingKind = 'OVERALL' | 'MATH' | 'RW';
 
+/** Barcha ballar 10 ga karrali: 1213 → 1210, 898 → 900 (−0 o'rniga 0). */
+export function round10(x: number): number {
+  return Math.round(x / 10) * 10 || 0;
+}
+
 /**
- * Reyting o'quvchiga SAT shkalasida ko'rsatiladi:
- *  - OVERALL — umumiy reyting 400–1600, aniq son (har javobdagi o'zgarish ko'rinsin);
- *  - MATH / RW — bo'lim bali 200–800, doim 10 ga karrali (ichki Elo qiymatining yarmi).
+ * Reyting o'quvchiga SAT shkalasida ko'rsatiladi, doim 10 ga karrali:
+ *  - OVERALL — umumiy reyting 400–1600;
+ *  - MATH / RW — bo'lim bali 200–800 (ichki Elo qiymatining yarmi).
+ * Har bir javobdagi o'zgarish (+12, −8) aniq qoladi — aks holda to'g'ri javobdan keyin «+0» chiqishi mumkin.
  */
 export function ratingFactor(type: RatingKind): number {
   return type === 'OVERALL' ? 1 : 0.5;
+}
+
+/** Kun/hafta/oy bo'yicha reyting o'zgarishi — ballar kabi 10 ga karrali (−237 → −240). */
+export function displayChange(type: RatingKind, delta: number): number {
+  return round10(delta * ratingFactor(type));
 }
 
 const IDENTITY_TABLE: Array<[number, number]> = [
@@ -102,7 +113,7 @@ const IDENTITY_TABLE: Array<[number, number]> = [
 ];
 
 export function displayRating(type: RatingKind, rating: number, table: Array<[number, number]> = IDENTITY_TABLE): number {
-  if (type === 'OVERALL') return clamp(Math.round(rating), 400, 1600);
+  if (type === 'OVERALL') return clamp(round10(rating), 400, 1600);
   // Yaxlitlanmagan bahoning yarmi, keyin 10 ga (ikki marta yaxlitlash xatosisiz): 1517 -> 760, 1238 -> 620
   return clamp(Math.round(interpolateSat(rating, table) / 20) * 10, 200, 800);
 }

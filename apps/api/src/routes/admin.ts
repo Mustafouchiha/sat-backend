@@ -1,5 +1,5 @@
 import type { Prisma, Role, UserStatus } from '@prisma/client';
-import { DEFAULT_SETTINGS, tashkentDate } from '@sat/shared';
+import { DEFAULT_SETTINGS, round10, tashkentDate } from '@sat/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
@@ -198,7 +198,7 @@ adminRouter.get(
       attempts30,
       answers30: answers30._count._all,
       accuracy30: answers30._count._all ? Math.round((correct30 / answers30._count._all) * 100) : null,
-      mockAvg30: mockAvg._avg.totalScaled ? Math.round(mockAvg._avg.totalScaled) : null,
+      mockAvg30: mockAvg._avg.totalScaled ? round10(mockAvg._avg.totalScaled) : null,
       mockCount30: mockAvg._count._all,
       templates: Object.fromEntries(templates.map((t) => [t.status, t._count._all])),
       openReports,
