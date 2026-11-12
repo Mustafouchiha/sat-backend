@@ -79,6 +79,8 @@ export interface AiConfig {
   refillDailyJobs: number;
   /** O'quvchi «AI yangi savollar» tugmasi bilan kuniga necha marta savol yarata oladi */
   studentDailyJobs: number;
+  /** Kunlik AI xarajati chegarasi (USD, chat + savol yaratish). Yetganda AI ertagacha to'xtaydi; 0 — cheklovsiz */
+  dailyBudgetUsd: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -129,6 +131,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     autoRefill: true,
     refillDailyJobs: 10,
     studentDailyJobs: 3,
+    dailyBudgetUsd: 5,
   },
 };
 

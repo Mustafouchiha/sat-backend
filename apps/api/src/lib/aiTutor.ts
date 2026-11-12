@@ -4,7 +4,7 @@ import { displayRating } from '@sat/shared';
 import { prisma } from '../db';
 import { aiClient, aiConfigured, aiError, totalIn, usageCost } from './aiClient';
 import { fallbackOpts, questionAsText, skillById } from './aiQuestions';
-import { tashkentDayStart } from './aiJobs';
+import { budgetError, tashkentDayStart, withinBudget } from './aiJobs';
 import { hasRole } from './auth';
 import { HttpError, notFound } from './http';
 import { getSettings } from './settings';
@@ -72,6 +72,8 @@ export async function chatState(user: TutorUser) {
     limit: unlimited ? null : s.chatDailyLimit,
     used,
     busy: await inTimedAttempt(user.id),
+    /** Markazning kunlik AI byudjeti tugagan */
+    overBudget: !(await withinBudget()),
   };
 }
 
@@ -84,6 +86,7 @@ async function guard(user: TutorUser): Promise<void> {
   if (st.limit !== null && st.used >= st.limit) {
     throw new HttpError(429, `Bugungi limit tugadi (${st.limit} ta xabar). Ertaga yana yozishingiz mumkin`, 'AI_LIMIT');
   }
+  if (st.overBudget) throw budgetError();
 }
 
 // ───────────────────────── Kontekst ─────────────────────────

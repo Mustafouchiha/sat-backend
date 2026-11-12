@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { prisma } from '../db';
 import { hasRole, me, requireActive, requireAuth, requireRole } from '../lib/auth';
 import { aiConfigured } from '../lib/aiClient';
-import { createJob, jobView, studentJobsToday, tashkentDayStart } from '../lib/aiJobs';
+import { createJob, jobView, studentJobsToday, tashkentDayStart, withinBudget } from '../lib/aiJobs';
 import { skillById, type SampleFile, type Slot } from '../lib/aiQuestions';
 import { chatState, clearChat, listMessages, recentMistakes, sendChat, teachSkill } from '../lib/aiTutor';
 import { filterCatalog, getCatalog, type CatalogItem } from '../lib/catalog';
@@ -117,7 +117,7 @@ aiRouter.post(
       // avto-nashr o'chiq bo'lsa ham o'quvchi o'zi uchun yaratilganlarini ishlaydi
       const rows = await prisma.questionTemplate.findMany({ where: { id: { in: job.templateIds }, status: { not: 'ARCHIVED' } } });
       jobRefs = rows.filter((t) => !seen.has(t.id));
-    } else if (fresh.length < 5 && aiConfigured()) {
+    } else if (fresh.length < 5 && aiConfigured() && (await withinBudget())) {
       const staff = hasRole(u, 'OPERATOR', 'TEACHER');
       const used = await studentJobsToday(u.id);
       if (staff || used < s.studentDailyJobs) {
@@ -258,6 +258,7 @@ aiRouter.get(
       sum(month),
       prisma.questionTemplate.groupBy({ by: ['status'], where: { tags: { has: 'ai' } }, _count: true }),
     ]);
-    res.json({ configured: aiConfigured(), today: t, month: m, bank: Object.fromEntries(aiQuestions.map((g) => [g.status, g._count])) });
+    const budgetUsd = (await getSettings()).ai.dailyBudgetUsd;
+    res.json({ configured: aiConfigured(), budgetUsd, today: t, month: m, bank: Object.fromEntries(aiQuestions.map((g) => [g.status, g._count])) });
   }),
 );

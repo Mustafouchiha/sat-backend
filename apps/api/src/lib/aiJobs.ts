@@ -68,6 +68,32 @@ function pump(): void {
   }
 }
 
+// ───────────────────────── Kunlik byudjet ─────────────────────────
+
+let spendCache: { at: number; usd: number } | null = null;
+
+/** Bugungi (Toshkent kuni) AI xarajati: chat + savol yaratish, USD. 30 soniya keshlanadi. */
+export async function todaySpendUsd(): Promise<number> {
+  if (spendCache && Date.now() - spendCache.at < 30_000) return spendCache.usd;
+  const since = tashkentDayStart();
+  const [chat, jobs] = await Promise.all([
+    prisma.aiMessage.aggregate({ where: { createdAt: { gte: since } }, _sum: { costUsd: true } }),
+    prisma.aiJob.aggregate({ where: { createdAt: { gte: since } }, _sum: { costUsd: true } }),
+  ]);
+  const usd = (chat._sum.costUsd ?? 0) + (jobs._sum.costUsd ?? 0);
+  spendCache = { at: Date.now(), usd };
+  return usd;
+}
+
+/** Kunlik byudjet (sozlamalar → ai.dailyBudgetUsd) hali tugamaganmi. 0 — cheklovsiz. */
+export async function withinBudget(): Promise<boolean> {
+  const budget = (await getSettings()).ai.dailyBudgetUsd;
+  if (!budget || budget <= 0) return true;
+  return (await todaySpendUsd()) < budget;
+}
+
+export const budgetError = () => new HttpError(429, "AI bugungi limitga yetdi — ertaga yana ishlaydi", 'AI_BUDGET');
+
 export async function createJob(opts: {
   section: Section;
   reason: JobReason;
@@ -77,6 +103,11 @@ export async function createJob(opts: {
   files?: SampleFile[];
 }): Promise<AiJob> {
   if (!aiConfigured()) throw new HttpError(501, "AI sozlanmagan: Railway'da ANTHROPIC_API_KEY o'rnatilmagan", 'AI_DISABLED');
+  if (!(await withinBudget())) {
+    throw opts.reason === 'admin'
+      ? new HttpError(429, "Bugungi AI byudjeti tugadi — sozlamalarda «Kunlik AI byudjeti» ni oshiring yoki ertaga urinib ko'ring", 'AI_BUDGET')
+      : budgetError();
+  }
   const job = await prisma.aiJob.create({
     data: {
       section: opts.section,
@@ -247,7 +278,7 @@ function tashkentDayStart(): Date {
 export async function requestRefill(shortages: Shortage[]): Promise<void> {
   if (!aiConfigured() || !shortages.length) return;
   const s = (await getSettings()).ai;
-  if (!s.autoRefill || s.refillDailyJobs <= 0) return;
+  if (!s.autoRefill || s.refillDailyJobs <= 0 || !(await withinBudget())) return;
   let left = s.refillDailyJobs - (await prisma.aiJob.count({ where: { reason: 'refill', createdAt: { gte: tashkentDayStart() } } }));
   if (left <= 0) return;
   // Shu mavzuga yaqinda (6 soat) har qanday AI vazifa bo'lgan bo'lsa — qayta yaratmaymiz (o'quvchi/admin vazifasi ham hisob)
