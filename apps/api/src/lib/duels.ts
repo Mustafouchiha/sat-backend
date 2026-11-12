@@ -4,6 +4,7 @@ import { prisma } from '../db';
 import type { AuthUser } from './auth';
 import { filterCatalog, getCatalog } from './catalog';
 import { addXp, checkAchievements } from './effects';
+import { seenTemplates } from './fresh';
 import { HttpError, notFound, randomCode } from './http';
 import { emitToDuel } from './realtime';
 import { createSession, finishSession } from './sessions';
@@ -20,7 +21,9 @@ export async function createDuel(user: AuthUser, opts: { section?: Section | nul
   const myRating = opts.section ? ratings[opts.section].rating : ratings.OVERALL.rating;
   const catalog = filterCatalog(await getCatalog(), { section: opts.section ?? null });
   if (catalog.length === 0) throw new HttpError(409, "Savollar bankida savol yo'q", 'NO_QUESTIONS');
-  const templateIds = pickForMe(catalog, myRating, Math.min(s.duel.count, catalog.length), { float: Math.random }, s.forMe);
+  // Duel yaratgan o'quvchi hali ko'rmagan savollar afzal (raqib keyin qo'shiladi)
+  const seen = await seenTemplates(user.id);
+  const templateIds = pickForMe(catalog, myRating, Math.min(s.duel.count, catalog.length), { float: Math.random }, s.forMe, seen);
   return prisma.duel.create({
     data: {
       code: randomCode(6),

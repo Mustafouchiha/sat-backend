@@ -80,6 +80,21 @@ export interface AssembleInput {
   ratingOffset?: number;
   rng: RandomSource;
   exclude?: string[];
+  /** O'quvchi oldin ko'rgan savollar — imkon bo'lsa tanlanmaydi (faqat yangi savollar tugasa qaytadi) */
+  avoid?: ReadonlySet<string>;
+  /** Shu ko'nikmada o'quvchi uchun yangi savol qolmagan (avoid bilan) */
+  onExhausted?: (skillId: string) => void;
+}
+
+/**
+ * "Bitta savol qaytib tushmasin": avval o'quvchi hali ko'rmagan savollar (aralash),
+ * keyin ko'rilganlar — eng uzoq vaqt oldin ko'rilgani birinchi. seen: id -> oxirgi ko'rilgan vaqt (ms).
+ */
+export function freshFirst<T extends { id: string }>(items: readonly T[], seen: ReadonlyMap<string, number> | undefined, rng: RandomSource): T[] {
+  if (!seen?.size) return shuffle(items, rng);
+  const fresh = items.filter((t) => !seen.has(t.id));
+  const old = items.filter((t) => seen.has(t.id)).sort((a, b) => (seen.get(a.id) ?? 0) - (seen.get(b.id) ?? 0));
+  return [...shuffle(fresh, rng), ...old];
 }
 
 function shuffle<T>(arr: readonly T[], rng: RandomSource): T[] {
@@ -165,9 +180,18 @@ export function assembleAdaptiveSet(inp: AssembleInput): string[] {
   });
 
   const target = inp.userRating !== undefined ? inp.userRating + (inp.ratingOffset ?? -100) : undefined;
+  const avoid = inp.avoid;
+  const fresh = (t: TemplateRef) => !used.has(t.id) && !avoid?.has(t.id);
   const pickTemplate = (skill: string, bucket: Bucket): string | undefined => {
-    let cands = templates.filter((t) => t.skillId === skill && !used.has(t.id));
-    if (!cands.length) cands = templates.filter((t) => bucketSkills[bucket].includes(t.skillId) && !used.has(t.id));
+    // 1) shu ko'nikmadagi ko'rilmagan, 2) shu guruhdagi ko'rilmagan
+    let cands = templates.filter((t) => t.skillId === skill && fresh(t));
+    if (!cands.length) cands = templates.filter((t) => bucketSkills[bucket].includes(t.skillId) && fresh(t));
+    if (!cands.length && avoid?.size) {
+      // Yangi savol tugagan: takrordan ko'ra boshqa mavzudagi yangi savol afzal (oxirgi to'ldirishda).
+      // Chaqiruvchi shu mavzuga AI bilan yangi savollar yaratishi mumkin.
+      inp.onExhausted?.(skill);
+      return undefined;
+    }
     if (!cands.length) cands = templates.filter((t) => t.skillId === skill); // qayta ishlatish (yangi seed bilan)
     if (!cands.length) return undefined;
     if (target !== undefined) {
@@ -190,8 +214,9 @@ export function assembleAdaptiveSet(inp: AssembleInput): string[] {
     }
   }
 
-  // yetmasa — istalgan foydalanilmagan shablon
-  for (const t of shuffle(templates, rng)) {
+  // yetmasa — istalgan foydalanilmagan shablon (avval ko'rilmaganlari)
+  const rest = shuffle(templates, rng);
+  for (const t of [...rest.filter((x) => !avoid?.has(x.id)), ...rest.filter((x) => avoid?.has(x.id))]) {
     if (result.length >= count) break;
     if (!used.has(t.id)) take(t.id);
   }
@@ -208,8 +233,19 @@ export function pickForMe(
   count: number,
   rng: RandomSource,
   cfg: { window: number; offset: number },
+  /** Ko'rilgan savollar: id -> oxirgi ko'rilgan vaqt. Avval ko'rilmaganlar, yetmasa eng eskilari. */
+  seen?: ReadonlyMap<string, number>,
 ): string[] {
   if (!templates.length) return [];
+  if (seen?.size) {
+    const fresh = templates.filter((t) => !seen.has(t.id));
+    if (fresh.length >= count) return pickForMe(fresh, userRating, count, rng, cfg);
+    const picked = fresh.length ? pickForMe(fresh, userRating, fresh.length, rng, cfg) : [];
+    const old = freshFirst(templates.filter((t) => seen.has(t.id)), seen, rng);
+    // eng uzoq vaqt oldin ko'rilganlar ichidan reytingga mosini
+    const oldest = old.slice(0, Math.max(count * 3, 10));
+    return [...picked, ...pickForMe(oldest, userRating, count - picked.length, rng, cfg)];
+  }
   let window = cfg.window;
   let cands = templates.filter((t) => Math.abs(t.rating - userRating) <= window);
   while (cands.length < count && cands.length < templates.length && window < 2000) {

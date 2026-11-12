@@ -4,6 +4,7 @@ import { prisma } from '../db';
 import type { AuthUser } from './auth';
 import { filterCatalog, getCatalog, type CatalogItem } from './catalog';
 import { addXp, applyEffects, checkAchievements, type EarnedAchievement } from './effects';
+import { seenTemplates } from './fresh';
 import { HttpError, notFound } from './http';
 import { getSettings } from './settings';
 import { ensureRatings } from './users';
@@ -121,6 +122,8 @@ export interface AnswerResult {
   expired?: boolean;
   /** Javobdan keyin — "savolda xato bor" shikoyati uchun aynan shu variant */
   ref: { templateId: string; templateVersion: number; seed: number };
+  /** AI ustozga shu savol haqida so'rash uchun */
+  answerId: string;
 }
 
 export async function answerSession(
@@ -151,6 +154,7 @@ export async function answerSession(
       lives: livesLeft(fresh),
       achievements: [],
       ref,
+      answerId: row.id,
     };
   }
   if (attempt.status !== 'IN_PROGRESS') throw new HttpError(409, 'Sessiya yakunlangan', 'FINISHED');
@@ -169,6 +173,7 @@ export async function answerSession(
       achievements: [],
       expired: true,
       ref,
+      answerId: row.id,
     };
   }
 
@@ -228,6 +233,7 @@ export async function answerSession(
     lives: livesLeft(updated),
     achievements,
     ref,
+    answerId: row.id,
   };
 }
 
@@ -244,9 +250,10 @@ export async function appendRushItem(attemptId: string, userId: string): Promise
   const used = new Set(attempt.answers.map((a) => a.templateId));
   const recent = new Set(attempt.answers.slice(-5).map((a) => a.templateId));
   const pool = catalog.filter((c) => !used.has(c.id));
-  const cands = (pool.length ? pool : catalog.filter((c) => !recent.has(c.id))).sort(
-    (a, b) => Math.abs(a.rating - target) - Math.abs(b.rating - target),
-  );
+  // Oldin ko'rilgan savol faqat yangisi yo'q bo'lsa: reyting farqiga +400 "jarima"
+  const seen = await seenTemplates(userId);
+  const score = (c: CatalogItem) => Math.abs(c.rating - target) + (seen.has(c.id) ? 400 : 0);
+  const cands = (pool.length ? pool : catalog.filter((c) => !recent.has(c.id))).sort((a, b) => score(a) - score(b));
   const list = cands.length ? cands : catalog;
   const pick = list[Math.floor(Math.random() * Math.min(5, list.length))];
   const seed = await pickWorkingSeed(pick.id, pick.version);
@@ -321,6 +328,7 @@ export async function sessionReview(attemptId: string, user: AuthUser) {
     const v = await getVariant(r);
     items.push({
       order: r.order,
+      answerId: r.id,
       question: reviewQuestion(v, r.templateId),
       answer: r.answer,
       isCorrect: r.isCorrect,

@@ -60,12 +60,16 @@ export function filterCatalog(items: CatalogItem[], f: CatalogFilter, settings?:
   });
 }
 
-/** Pool'dan tanlash: filtr bo'yicha topilmasa, shartlarni bosqichma-bosqich yumshatadi. */
+/**
+ * Pool'dan tanlash: filtr bo'yicha topilmasa, shartlarni bosqichma-bosqich yumshatadi.
+ * seen berilsa — avval o'quvchi hali ko'rmagan savol (istalgan bosqichda), topilmasa eng uzoq vaqt oldin ko'rilgani.
+ */
 export function pickFromPool(
   items: CatalogItem[],
   f: CatalogFilter,
   used: Set<string>,
   rnd: () => number = Math.random,
+  seen?: ReadonlyMap<string, number>,
 ): CatalogItem | undefined {
   const tiers: CatalogFilter[] = [
     f,
@@ -73,11 +77,22 @@ export function pickFromPool(
     { section: f.section, domainId: f.domainId },
     { section: f.section },
   ];
-  for (const tier of tiers) {
-    const cands = filterCatalog(items, tier);
+  const tierCands = tiers.map((tier) => filterCatalog(items, tier));
+  if (seen?.size) {
+    for (const cands of tierCands) {
+      const fresh = cands.filter((c) => !used.has(c.id) && !seen.has(c.id));
+      if (fresh.length) return fresh[Math.floor(rnd() * fresh.length)];
+    }
+  }
+  for (const cands of tierCands) {
     if (!cands.length) continue;
-    const fresh = cands.filter((c) => !used.has(c.id));
-    const pool = fresh.length ? fresh : cands;
+    const unused = cands.filter((c) => !used.has(c.id));
+    if (unused.length && seen?.size) {
+      // hammasi ko'rilgan: eng eskilaridan biri (yangi sonlar bilan)
+      const oldest = [...unused].sort((a, b) => (seen.get(a.id) ?? 0) - (seen.get(b.id) ?? 0)).slice(0, 3);
+      return oldest[Math.floor(rnd() * oldest.length)];
+    }
+    const pool = unused.length ? unused : cands;
     return pool[Math.floor(rnd() * pool.length)];
   }
   return undefined;

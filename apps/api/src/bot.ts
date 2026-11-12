@@ -4,7 +4,9 @@ import { Telegraf, type Context } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { prisma } from './db';
 import { env } from './env';
+import { clearChat, sendChat, splitMessage, type ChatImage } from './lib/aiTutor';
 import { hasRole } from './lib/auth';
+import { HttpError } from './lib/http';
 import { appUrl, escapeHtml, setBotTitle, setBotUsername } from './lib/notify';
 import { displayName } from './lib/users';
 import { approveQrLogin, findPendingQr, linkPhone, maskPhone, rejectQrLogin, sendPendingPhoneCode } from './lib/webLogin';
@@ -90,7 +92,8 @@ export function createBot(): Telegraf | null {
     }
     return ctx.reply(
       `Salom, ${escapeHtml(from.first_name ?? '')}! 👋\n\n<b>Digital SAT</b> ga tayyorlov ilovasiga xush kelibsiz.\n` +
-        `• Har kuni kunlik test va streak 🔥\n• Reyting tizimi va duellar ⚔️\n• Har safar yangi sonli savollar 🎲\n\n` +
+        `• Har kuni kunlik test va streak 🔥\n• Reyting tizimi va duellar ⚔️\n• Har safar yangi savollar 🎲\n` +
+        `• 🤖 AI ustoz: SAT bo'yicha savolingizni shu chatga yozing yoki savol rasmini yuboring\n\n` +
         `Boshlash uchun tugmani bosing. O'qituvchingizdan guruh taklif kodini oling.`,
       { parse_mode: 'HTML', ...openButton() },
     );
@@ -101,12 +104,30 @@ export function createBot(): Telegraf | null {
 
   bot.command('help', (ctx) =>
     ctx.reply(
-      "/app — ilovani ochish\n/phone — kompyuterda kirish uchun telefon raqamni ulash\n/stats — kunlik statistika (admin)\n\n" +
+      "/app — ilovani ochish\n/ai — AI ustoz haqida\n/new — AI ustoz bilan yangi suhbat\n/phone — kompyuterda kirish uchun telefon raqamni ulash\n/stats — kunlik statistika (admin)\n\n" +
+        "🤖 SAT bo'yicha savolingizni shu chatga yozing yoki savol rasmini yuboring — AI ustoz tushuntirib beradi.\n\n" +
         `Kompyuterda: ${env.MINI_APP_URL} ni oching va QR kodni telefoningiz bilan skanerlang.\n\n` +
         "Savollar bo'yicha shikoyatni ilova ichidagi \"Xato bor\" tugmasi orqali yuboring.",
       { link_preview_options: { is_disabled: true } },
     ),
   );
+
+  // ───────────── AI ustoz (ilovadagi chat bilan bitta suhbat) ─────────────
+  bot.command('ai', (ctx) =>
+    ctx.reply(
+      "🤖 AI ustoz — SAT Math va English bo'yicha yordamchi.\n\n" +
+        "• Savolingizni shu chatga yozing: «Kvadrat tenglamani qanday yechaman?»\n" +
+        "• Savolning rasmini yuboring — yechimini tushuntirib beradi\n" +
+        "• /new — yangi suhbat boshlash\n\n" +
+        "Ilovada ham xuddi shu suhbat bor: «🤖 AI ustoz» bo'limi. Test vaqtida AI ishlamaydi.",
+      openButton({ path: '/ai' }, '🤖 Ilovada ochish'),
+    ),
+  );
+  bot.command('new', async (ctx) => {
+    const user = await upsertTgUser(tgUserOf(ctx.from));
+    await clearChat(user.id);
+    return ctx.reply("🆕 Yangi suhbat boshlandi. Savolingizni yozing yoki savol rasmini yuboring.");
+  });
 
   // QR orqali kirishni tasdiqlash / rad etish
   bot.action(/^wl:(ok|no):([A-Za-z0-9_-]{16,40})$/, async (ctx) => {
@@ -146,6 +167,68 @@ export function createBot(): Telegraf | null {
     const user = await prisma.user.findUnique({ where: { tgId: BigInt(ctx.from.id) } });
     if (!user || !hasRole(user, 'OPERATOR')) return ctx.reply("Bu buyruq faqat adminlar uchun.");
     return ctx.reply(await dailyStatsText(), { parse_mode: 'HTML' });
+  });
+
+  /**
+   * Shaxsiy chatdagi oddiy matn va rasm — AI ustozga. Javob fonda tayyorlanadi: webhook darhol javob qaytaradi,
+   * aks holda Telegram uzoq kutib, xabarni qayta yuborishi mumkin.
+   */
+  const askTutor = (ctx: Context, text: string, getImage?: () => Promise<ChatImage | null>) => {
+    if (!ctx.from || ctx.chat?.type !== 'private') return;
+    const from = ctx.from;
+    void (async () => {
+      void ctx.sendChatAction('typing').catch(() => undefined);
+      const typing = setInterval(() => void ctx.sendChatAction('typing').catch(() => undefined), 4500);
+      try {
+        const user = await upsertTgUser(tgUserOf(from));
+        const image = getImage ? await getImage() : null;
+        const out = await sendChat(user, { text, image, channel: 'bot' });
+        for (const part of splitMessage(out.messages[1].content)) {
+          await ctx.reply(part, { link_preview_options: { is_disabled: true } });
+        }
+      } catch (e) {
+        const known = e instanceof HttpError;
+        if (!known) console.error('AI ustoz (bot) xatosi:', (e as Error).message);
+        const text = !known
+          ? "AI ustoz hozir javob bera olmadi, birozdan keyin qayta urinib ko'ring."
+          : e.code === 'AI_DISABLED'
+            ? 'AI ustoz tez orada ishga tushadi. Hozircha ilovada mashq qiling 👇'
+            : e.message;
+        const needApp = known && ['PENDING', 'AI_DISABLED'].includes(e.code ?? '');
+        await ctx.reply(`⚠️ ${text}`, needApp ? openButton() : undefined).catch(() => undefined);
+      } finally {
+        clearInterval(typing);
+      }
+    })();
+  };
+
+  const downloadImage = async (ctx: Context, fileId: string, mime: ChatImage['mime']): Promise<ChatImage> => {
+    const link = await ctx.telegram.getFileLink(fileId);
+    const r = await fetch(link);
+    if (!r.ok) throw new HttpError(502, "Rasmni yuklab bo'lmadi, qayta yuboring");
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 5 * 1024 * 1024) throw new HttpError(413, 'Rasm juda katta (5 MB gacha)');
+    return { mime, data: buf.toString('base64') };
+  };
+
+  bot.on(message('text'), (ctx) => {
+    const text = ctx.message.text.trim();
+    if (text.startsWith('/')) return ctx.reply("Bunday buyruq yo'q. /help — buyruqlar ro'yxati.");
+    askTutor(ctx, text);
+  });
+
+  bot.on(message('photo'), (ctx) => {
+    const photo = ctx.message.photo[ctx.message.photo.length - 1];
+    askTutor(ctx, ctx.message.caption?.trim() ?? '', () => downloadImage(ctx, photo.file_id, 'image/jpeg'));
+  });
+
+  bot.on(message('document'), (ctx) => {
+    const doc = ctx.message.document;
+    const mime = doc.mime_type ?? '';
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(mime)) {
+      return ctx.reply("AI ustoz hozircha faqat matn va rasmlarni (JPG, PNG) tushunadi.");
+    }
+    askTutor(ctx, ctx.message.caption?.trim() ?? '', () => downloadImage(ctx, doc.file_id, mime as ChatImage['mime']));
   });
 
   bot.catch((err) => console.error('Bot xatosi:', err));
@@ -200,6 +283,8 @@ export async function finishBotSetup(bot: Telegraf, webhook: boolean): Promise<v
     await bot.telegram.setMyCommands([
       { command: 'start', description: 'Boshlash' },
       { command: 'app', description: 'Ilovani ochish' },
+      { command: 'ai', description: 'AI ustoz haqida' },
+      { command: 'new', description: 'AI ustoz: yangi suhbat' },
       { command: 'phone', description: 'Kompyuterda kirish uchun raqamni ulash' },
       { command: 'help', description: 'Yordam' },
     ]);

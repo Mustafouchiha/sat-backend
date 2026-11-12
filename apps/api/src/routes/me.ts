@@ -288,13 +288,21 @@ meRouter.get(
       take: 400,
       include: {
         template: {
-          select: { id: true, title: true, section: true, status: true, skill: { select: { name: true } }, domain: { select: { name: true } } },
+          select: { id: true, title: true, section: true, status: true, skillId: true, skill: { select: { name: true } }, domain: { select: { name: true } } },
         },
       },
     });
     const review = await prisma.reviewItem.findMany({ where: { userId: u.id } });
     const reviewMap = new Map(review.map((r) => [r.templateId, r]));
     const grouped = new Map<string, Record<string, unknown> & { count: number }>();
+    // Zaif mavzular: xatolar ko'nikma bo'yicha (AI tushuntirish va yangi savollar uchun)
+    const topics = new Map<string, { skillId: string; name: string; section: string; domain: string; mistakes: number; questions: Set<string>; lastWrongAt: Date | null }>();
+    for (const w of wrong) {
+      const tp = topics.get(w.template.skillId) ?? { skillId: w.template.skillId, name: w.template.skill.name, section: w.template.section, domain: w.template.domain.name, mistakes: 0, questions: new Set<string>(), lastWrongAt: w.answeredAt };
+      tp.mistakes++;
+      tp.questions.add(w.templateId);
+      topics.set(w.template.skillId, tp);
+    }
     for (const w of wrong) {
       const g = grouped.get(w.templateId);
       if (g) {
@@ -306,6 +314,7 @@ meRouter.get(
         templateId: w.templateId,
         title: w.template.title,
         section: w.template.section,
+        skillId: w.template.skillId,
         skill: w.template.skill.name,
         domain: w.template.domain.name,
         available: w.template.status === 'PUBLISHED',
@@ -315,7 +324,11 @@ meRouter.get(
         review: r ? { stage: r.stage, streak: r.streak, dueAt: r.dueAt, due: r.dueAt <= new Date() } : null,
       });
     }
-    res.json({ items: [...grouped.values()], reviewDue: review.filter((r) => r.dueAt <= new Date()).length });
+    const weak = [...topics.values()]
+      .sort((x, y) => y.mistakes - x.mistakes)
+      .slice(0, 6)
+      .map(({ questions, ...t }) => ({ ...t, questions: questions.size }));
+    res.json({ items: [...grouped.values()], topics: weak, reviewDue: review.filter((r) => r.dueAt <= new Date()).length });
   }),
 );
 

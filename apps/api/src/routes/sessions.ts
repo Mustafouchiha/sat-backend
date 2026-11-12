@@ -1,10 +1,11 @@
 import type { Section } from '@prisma/client';
-import { assembleAdaptiveSet, pickForMe } from '@sat/shared';
+import { assembleAdaptiveSet, freshFirst, pickForMe } from '@sat/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
 import { me, requireActive, requireAuth } from '../lib/auth';
 import { filterCatalog, getCatalog, type CatalogItem } from '../lib/catalog';
+import { reportExhausted, reportShortages, seenTemplates } from '../lib/fresh';
 import { ah, HttpError, notFound, parse } from '../lib/http';
 import { answerSession, appendRushItem, createSession, finishSession, getSessionState, sessionReview, type RushMeta } from '../lib/sessions';
 import { getSettings } from '../lib/settings';
@@ -65,38 +66,47 @@ sessionsRouter.post(
     let title = 'Mashq';
 
     if (body.templateIds?.length) {
+      // Xatolar daftaridan qayta ishlash — bu yerda takror ataylab (yangi sonlar bilan)
       refs = body.templateIds.map((id) => catalog.find((c) => c.id === id)).filter((c): c is CatalogItem => !!c);
       title = 'Xatolar ustida ishlash (yangi sonlar)';
     } else {
       const base = filterCatalog(catalog, { section: body.section, domainId: body.domainId, skillId: body.skillId });
       if (!base.length) throw new HttpError(409, "Bu filtr bo'yicha savollar yo'q", 'NO_QUESTIONS');
       const byId = new Map(base.map((c) => [c.id, c]));
+      // Bitta savol qaytib tushmasin: avval o'quvchi ko'rmaganlari, tugasa — eng uzoq vaqt oldin ko'rilganlari
+      const seen = await seenTemplates(u.id);
       if (body.difficulty === 'FOR_ME') {
         const ratings = await ensureRatings(u.id);
         const r = body.section ? ratings[body.section].rating : ratings.OVERALL.rating;
-        refs = pickForMe(base, r, body.count, rnd, s.forMe).map((id) => byId.get(id)!);
+        refs = pickForMe(base, r, body.count, rnd, s.forMe, seen).map((id) => byId.get(id)!);
         title = 'Mashq · Men uchun';
       } else if (body.difficulty === 'ADAPTIVE') {
+        // Takrorlash navbati bu yerga aralashtirilmaydi — xatolar faqat «Xatolar daftari»da qaytadi
+        const exhausted = new Set<string>();
         const ids = assembleAdaptiveSet({
           count: body.count,
           templates: base,
           mastery: await masteryMap(u.id),
-          dueReviewTemplateIds: await dueReviewIds(u.id),
+          dueReviewTemplateIds: [],
           ratios: s.autoTest,
           masteryCfg: s.mastery,
           rng: rnd,
+          avoid: new Set(seen.keys()),
+          onExhausted: (sk) => exhausted.add(sk),
         });
+        reportExhausted(exhausted);
         refs = ids.map((id) => byId.get(id)!).filter(Boolean);
         title = 'Shaxsiy mashq';
       } else if (body.difficulty !== 'ANY') {
-        refs = shuffle(filterCatalog(base, { difficulty: body.difficulty }, s)).slice(0, body.count);
+        refs = freshFirst(filterCatalog(base, { difficulty: body.difficulty }, s), seen, rnd).slice(0, body.count);
         if (!refs.length) throw new HttpError(409, "Bu qiyinlikda savollar yo'q", 'NO_QUESTIONS');
       } else {
-        refs = shuffle(base).slice(0, body.count);
+        refs = freshFirst(base, seen, rnd).slice(0, body.count);
       }
       // Math shablonlari yangi sonlar bilan takrorlanishi mumkin
       const math = refs.filter((r) => r.section === 'MATH');
       while (refs.length < body.count && math.length) refs.push(math[Math.floor(Math.random() * math.length)]);
+      reportShortages(refs, seen);
     }
     const attempt = await createSession(u.id, 'PRACTICE', refs, {
       title,

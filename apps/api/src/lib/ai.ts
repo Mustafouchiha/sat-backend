@@ -54,7 +54,7 @@ export const AiSuggestion = z.object({
 
 export type AiSuggestionT = z.infer<typeof AiSuggestion>;
 
-const SVG_EXAMPLE =
+export const SVG_EXAMPLE =
   '<svg viewBox="0 0 300 200" width="300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">' +
   '<polygon points="50,170 260,170 50,40" fill="none" stroke="currentColor" stroke-width="2"/>' +
   '<polyline points="62,170 62,158 50,158" fill="none" stroke="currentColor" stroke-width="1.5"/>' +

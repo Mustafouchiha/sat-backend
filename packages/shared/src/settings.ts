@@ -56,6 +56,29 @@ export interface AppSettings {
   xp: { correct: number; wrong: number; dailyBonus: number; duelWin: number; testFinish: number };
   streak: { freezePerWeek: number };
   adaptive: { defaultThreshold: number };
+  ai: AiConfig;
+}
+
+/** AI (Claude) sozlamalari. Kalit — Railway'dagi ANTHROPIC_API_KEY; bu yerda faqat modellar va cheklovlar. */
+export interface AiConfig {
+  /** AI ustoz (chat) Mini App va botda ishlaydimi */
+  chatEnabled: boolean;
+  /** Chat modeli: claude-sonnet-5-5 (tavsiya), claude-haiku-5-5 (eng arzon), claude-opus-5-5 (eng kuchli) */
+  chatModel: string;
+  /** O'quvchi bir kunda nechta xabar yoza oladi (o'qituvchi va admin uchun cheklov yo'q) */
+  chatDailyLimit: number;
+  /** Savol yaratish modeli — sifat muhim */
+  genModel: string;
+  /** Yaratilgan savolni javobini ko'rmasdan yechib tekshiradigan model */
+  verifyModel: string;
+  /** Tekshiruvdan o'tgan AI savollari darhol bankka qo'shiladi; o'chirilsa — "Tekshiruvda" holatida admin tasdiqlaydi */
+  autoPublish: boolean;
+  /** O'quvchi uchun ko'rilmagan savol qolmasa, AI shu mavzuga avtomatik yangi savollar yaratadi */
+  autoRefill: boolean;
+  /** Avtomatik to'ldirish: kuniga ko'pi bilan nechta vazifa (har biri ~5 savol) */
+  refillDailyJobs: number;
+  /** O'quvchi «AI yangi savollar» tugmasi bilan kuniga necha marta savol yarata oladi */
+  studentDailyJobs: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -96,7 +119,25 @@ export const DEFAULT_SETTINGS: AppSettings = {
   xp: { correct: 10, wrong: 2, dailyBonus: 50, duelWin: 30, testFinish: 20 },
   streak: { freezePerWeek: 1 },
   adaptive: { defaultThreshold: 0.6 },
+  ai: {
+    chatEnabled: true,
+    chatModel: 'claude-sonnet-5-5',
+    chatDailyLimit: 30,
+    genModel: 'claude-opus-5-5',
+    verifyModel: 'claude-sonnet-5-5',
+    autoPublish: true,
+    autoRefill: true,
+    refillDailyJobs: 10,
+    studentDailyJobs: 3,
+  },
 };
+
+/** Admin panelda tanlanadigan Claude modellari (narx: 1 mln token uchun, kirish / chiqish). */
+export const AI_MODELS: Array<{ id: string; name: string; inUsd: number; outUsd: number; cacheReadUsd: number }> = [
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5 — eng kuchli', inUsd: 4, outUsd: 20, cacheReadUsd: 0.2 },
+  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5 — tavsiya', inUsd: 2, outUsd: 10, cacheReadUsd: 0.1 },
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5 — eng arzon', inUsd: 0.1, outUsd: 0.5, cacheReadUsd: 0.01 },
+];
 
 export type SettingsKey = keyof AppSettings;
 

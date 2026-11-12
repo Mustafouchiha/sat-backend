@@ -115,6 +115,18 @@ enum WebLoginStatus {
   REJECTED
 }
 
+enum AiJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum AiRole {
+  USER
+  ASSISTANT
+}
+
 // ───────────────────────── Foydalanuvchilar va guruhlar ─────────────────────────
 
 model User {
@@ -157,9 +169,68 @@ model User {
   parentLinks   ParentLink[]      @relation("LinkParent")
   webLogins     WebLogin[]
   usedInvites   GroupInvite[]     @relation("InviteUsedBy")
+  aiMessages    AiMessage[]
 
   @@index([status])
   @@map("users")
+}
+
+/// AI ustoz bilan suhbat — Mini App va bot bitta suhbatni ko'radi
+model AiMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      AiRole
+  content   String
+  /// app | bot
+  channel   String   @default("app")
+  /// { kind: question|lesson, title, answerId?, skillId?, text } — text modelga yuboriladi, ekranda ko'rinmaydi
+  context   Json?
+  /// O'quvchi yuborgan rasm (Media)
+  imageId   String?
+  /// «Yangi suhbat» — tarixdan yashiriladi, lekin kunlik limitda hisoblanadi
+  hidden    Boolean  @default(false)
+  inTokens  Int      @default(0)
+  outTokens Int      @default(0)
+  costUsd   Float    @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("ai_messages")
+}
+
+/// AI savol yaratish vazifasi (fonda bajariladi). Namuna fayllar bazaga yozilmaydi — faqat xotirada.
+model AiJob {
+  id          String      @id @default(cuid())
+  status      AiJobStatus @default(QUEUED)
+  section     Section
+  /// admin | student | refill
+  reason      String
+  /// { mode: topic|sample, skillIds, domainId, difficulty, count, text, files: [{name,mime}], note, studentContext }
+  input       Json
+  createdById String?
+  /// O'quvchi o'z zaif mavzusi uchun so'raganda
+  forUserId   String?
+  total       Int         @default(0)
+  done        Int         @default(0)
+  created     Int         @default(0)
+  rejected    Int         @default(0)
+  templateIds String[]    @default([])
+  /// [{ title, skillId, difficulty, ok, reason, templateId }]
+  log         Json?
+  error       String?
+  inTokens    Int         @default(0)
+  outTokens   Int         @default(0)
+  costUsd     Float       @default(0)
+  createdAt   DateTime    @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  @@index([status, createdAt])
+  @@index([reason, createdAt])
+  @@index([forUserId, createdAt])
+  @@map("ai_jobs")
 }
 
 /// Kompyuterdagi brauzer uchun kirish so'rovi: QR kod (telefonda bot orqali tasdiqlanadi) yoki telefon raqam + kod.

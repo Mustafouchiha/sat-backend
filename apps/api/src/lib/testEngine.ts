@@ -2,7 +2,8 @@ import type { Prisma, Test, TestModule, TestModuleItem } from '@prisma/client';
 import { routeSecondModule } from '@sat/shared';
 import { prisma } from '../db';
 import type { AuthUser } from './auth';
-import { getCatalog, pickFromPool } from './catalog';
+import { getCatalog, pickFromPool, type CatalogItem } from './catalog';
+import { reportShortages, seenTemplates } from './fresh';
 import { addXp, applyEffects, checkAchievements } from './effects';
 import { HttpError, notFound } from './http';
 import { notifyUser } from './notify';
@@ -39,23 +40,31 @@ async function resolveItems(
   module: TestModule & { items: TestModuleItem[] },
   startOrder: number,
   used: Set<string>,
+  seen: ReadonlyMap<string, number>,
 ): Promise<Prisma.AttemptAnswerCreateManyInput[]> {
   const catalog = await getCatalog();
   const rows: Prisma.AttemptAnswerCreateManyInput[] = [];
+  const pooled: CatalogItem[] = [];
   for (const item of module.items) {
     let ref: { id: string; version: number } | undefined;
     if (item.templateId) {
+      // o'qituvchi aniq savol qo'ygan — o'zgartirilmaydi
       ref = catalog.find((c) => c.id === item.templateId);
       if (!ref) {
         const t = await prisma.questionTemplate.findUnique({ where: { id: item.templateId }, select: { id: true, version: true } });
         ref = t ?? undefined;
       }
     } else {
-      ref = pickFromPool(
+      // yangi testda eski savollar chiqmasin: avval o'quvchi ko'rmaganlari
+      const picked = pickFromPool(
         catalog,
         { section: module.section, domainId: item.poolDomainId, skillId: item.poolSkillId, difficulty: item.poolDifficulty },
         used,
+        Math.random,
+        seen,
       );
+      if (picked) pooled.push(picked);
+      ref = picked;
     }
     if (!ref) continue;
     const seed = await pickWorkingSeed(ref.id, ref.version);
@@ -70,6 +79,7 @@ async function resolveItems(
       seed,
     });
   }
+  reportShortages(pooled, seen);
   return rows;
 }
 
@@ -95,7 +105,9 @@ async function createAttemptModule(
       deadlineAt: start ? new Date(now.getTime() + tm.durationSec * 1000) : null,
     },
   });
-  const rows = await resolveItems(attemptId, am.id, tm, startOrder, used);
+  const owner = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId }, select: { userId: true } });
+  const seen = await seenTemplates(owner.userId);
+  const rows = await resolveItems(attemptId, am.id, tm, startOrder, used, seen);
   if (!rows.length) throw new HttpError(409, "Modul uchun savol topilmadi — savollar bankini to'ldiring");
   await prisma.attemptAnswer.createMany({ data: rows });
   await prisma.attemptModule.update({ where: { id: am.id }, data: { total: rows.length } });

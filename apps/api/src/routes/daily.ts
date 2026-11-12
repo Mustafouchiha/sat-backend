@@ -6,10 +6,11 @@ import { prisma } from '../db';
 import { me, requireActive, requireAuth } from '../lib/auth';
 import { getCatalog } from '../lib/catalog';
 import { ah, HttpError } from '../lib/http';
+import { reportExhausted, reportShortages, seenTemplates } from '../lib/fresh';
 import { createSession } from '../lib/sessions';
 import { getSettings } from '../lib/settings';
 import { displayName, userStats } from '../lib/users';
-import { dueReviewIds, masteryMap } from './sessions';
+import { masteryMap } from './sessions';
 
 export const dailyRouter = Router();
 dailyRouter.use(requireAuth);
@@ -104,17 +105,25 @@ dailyRouter.post(
       const t = await prisma.questionTemplate.findUnique({ where: { id: daily.commonTemplateId } });
       if (t) common = { id: t.id, version: t.version, section: t.section, domainId: t.domainId, skillId: t.skillId, difficulty: t.difficulty, rating: t.rating, ratingGames: t.ratingGames };
     }
+    // Shaxsiy qism: zaif ko'nikmalardan, o'quvchi hali ko'rmagan savollar (xatolar faqat «Xatolar daftari»da qaytadi)
+    const seen = await seenTemplates(u.id);
+    const exhausted = new Set<string>();
     const personal = assembleAdaptiveSet({
       count: Math.max(0, s.daily.count - (common ? 1 : 0)),
       templates: catalog,
       mastery: await masteryMap(u.id),
-      dueReviewTemplateIds: await dueReviewIds(u.id),
+      dueReviewTemplateIds: [],
       ratios: s.autoTest,
       masteryCfg: s.mastery,
       rng: { float: Math.random },
       exclude: common ? [common.id] : [],
+      avoid: new Set(seen.keys()),
+      onExhausted: (sk) => exhausted.add(sk),
     });
-    const refs = [...(common ? [common] : []), ...personal.map((id) => byId.get(id)!).filter(Boolean)];
+    const personalRefs = personal.map((id) => byId.get(id)!).filter(Boolean);
+    reportShortages(personalRefs, seen);
+    reportExhausted(exhausted);
+    const refs = [...(common ? [common] : []), ...personalRefs];
     try {
       const attempt = await createSession(u.id, 'DAILY', refs, {
         title: `📅 Kunlik test · ${date}`,

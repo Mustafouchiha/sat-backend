@@ -5,6 +5,7 @@ import { attachWebhook, createBot, finishBotSetup } from './bot';
 import { startCron } from './cron';
 import { prisma } from './db';
 import { env } from './env';
+import { recoverJobs } from './lib/aiJobs';
 import { syncAchievements } from './lib/effects';
 import { setBot } from './lib/notify';
 import { initRealtime } from './lib/realtime';
@@ -47,6 +48,8 @@ async function main() {
   } catch (e) {
     console.error("Yutuqlarni sinxronlab bo'lmadi (migratsiya qilinganmi?):", (e as Error).message);
   }
+  // Oldingi ishga tushishdan qolgan AI vazifalari (fayllari xotirada edi) — yakunlanmagan deb belgilanadi
+  await recoverJobs();
 
   server.listen(env.PORT, () => {
     console.log(`🚀 API http://localhost:${env.PORT} (${env.NODE_ENV})`);

@@ -6,6 +6,7 @@ import { prisma } from './db';
 import { env } from './env';
 import { errorHandler } from './lib/http';
 import { adminRouter } from './routes/admin';
+import { aiRouter } from './routes/ai';
 import { assignmentsRouter } from './routes/assignments';
 import { attemptsRouter } from './routes/attempts';
 import { authRouter } from './routes/auth';
@@ -39,6 +40,8 @@ export function buildApp(app: Express): Express {
       maxAge: 86400,
     }),
   );
+  // AI: savol fotosi (chat) va eski test sahifalari/PDF (generator) — kattaroq so'rovlar
+  app.use('/api/ai', express.json({ limit: '28mb' }));
   app.use(express.json({ limit: '4mb' }));
 
   app.get('/', (_req, res) => res.json({ name: 'SAT Mini App API', ok: true }));
@@ -57,6 +60,8 @@ export function buildApp(app: Express): Express {
   app.use('/api/auth', rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false }), authRouter);
   app.use('/api/templates/ai-suggest', rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }));
   app.use('/api/web-login', webLoginRouter);
+  // AI: chat va savol yaratish qimmat — IP bo'yicha qo'shimcha cheklov (asosiy limitlar foydalanuvchi bo'yicha, aiTutor/aiJobs'da)
+  app.use('/api/ai', rateLimit({ windowMs: 60_000, limit: 150, standardHeaders: 'draft-7', legacyHeaders: false, skip: (req) => req.method === 'GET' }), aiRouter);
 
   app.use('/api/me', meRouter);
   app.use('/api/templates', templatesRouter);
